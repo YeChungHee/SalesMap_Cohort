@@ -1,0 +1,408 @@
+/* ── Sketchy wireframe styles ──────────────────────────────
+   Low-fi aesthetic: handwritten labels (Caveat / Kalam),
+   Korean copy in Pretendard, 1.5px black strokes,
+   single blue accent from 276 design system, occasional yellow highlight.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Kalam:wght@300;400;700&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+
+:root {
+  --ink: #1a1d24;
+  --ink-2: #4b5260;
+  --ink-3: #8b919c;
+  --paper: #fefdf9;
+  --paper-2: #f4f1e8;
+  --line: #1a1d24;
+  --line-soft: #c8c4b8;
+  --blue: #2D54D6;        /* 276 primary */
+  --blue-deep: #043EC4;
+  --blue-tint: #e6ecfb;
+  --yellow: #ffe066;       /* highlighter */
+  --yellow-2: #fff3a0;
+  --red: #d64545;
+  --green: #2f8f5b;
+
+  --sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+          "Helvetica Neue", Arial, sans-serif;
+  --hand: "Caveat", "Kalam", "Pretendard", cursive;
+  --hand-2: "Kalam", "Caveat", cursive;
+}
+
+* { box-sizing: border-box; }
+body {
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--paper-2);
+  margin: 0;
+}
+
+/* ── Artboard frame ─────────────────────────────── */
+.wf {
+  width: 1280px;
+  height: 820px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 13px;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  grid-template-rows: 56px 1fr;
+  grid-template-areas: "side  topbar" "side  main";
+}
+
+/* paper texture */
+.wf::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(rgba(0,0,0,0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  z-index: 0;
+}
+.wf > * { position: relative; z-index: 1; }
+
+/* ── Sidebar (rough placeholder) ──────────────── */
+.wf-side {
+  grid-area: side;
+  background: var(--ink);
+  color: #d8dae0;
+  padding: 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wf-side .brand {
+  display: flex; gap: 9px; align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed rgba(255,255,255,0.18);
+}
+.wf-side .brand .mark {
+  width: 28px; height: 28px;
+  background: var(--blue);
+  border-radius: 6px;
+  position: relative;
+}
+.wf-side .brand .mark::after {
+  content: "S"; position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-family: var(--hand); font-weight: 700;
+  color: #fff; font-size: 18px;
+}
+.wf-side .brand .name {
+  font-weight: 700; font-size: 12px; color: #fff;
+  letter-spacing: -0.01em;
+}
+.wf-side .brand .name small {
+  display: block; color: #6b727f; font-weight: 400;
+  font-size: 10px; margin-top: 1px;
+}
+
+.wf-side .sec {
+  font-family: var(--hand-2);
+  font-size: 11px; letter-spacing: 0.08em;
+  color: #6b727f; text-transform: uppercase;
+  margin: 4px 6px -2px;
+}
+.wf-side .nav { display: flex; flex-direction: column; gap: 2px; }
+.wf-side .nav a {
+  font-size: 12px; padding: 6px 9px; border-radius: 5px;
+  color: #b0b5be; text-decoration: none;
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--sans);
+}
+.wf-side .nav a .ico {
+  width: 14px; height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px; opacity: 0.6;
+}
+.wf-side .nav a.on {
+  background: rgba(45,84,214,0.25); color: #cfd9fa;
+}
+.wf-side .nav a.on .ico { background: var(--blue); border-color: var(--blue); opacity: 1; }
+
+.wf-side .foot {
+  margin-top: auto; font-size: 11px; color: #6b727f;
+  border-top: 1px dashed rgba(255,255,255,0.15);
+  padding-top: 10px;
+}
+.wf-side .foot .dot { display: inline-block; width: 6px; height: 6px; background: #4ade80; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+
+/* ── Topbar ────────────────────────────────── */
+.wf-top {
+  grid-area: topbar;
+  border-bottom: 1.5px solid var(--line);
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 14px;
+  background: var(--paper);
+}
+.wf-top .crumb {
+  font-family: var(--hand);
+  font-size: 22px; font-weight: 600;
+  color: var(--ink);
+}
+.wf-top .crumb small {
+  font-family: var(--sans);
+  font-size: 11px; color: var(--ink-3); margin-left: 6px;
+  font-weight: 400;
+}
+.wf-top .grow { flex: 1; }
+.wf-top .pill {
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  background: var(--paper);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.wf-top .pill.solid { background: var(--blue); color: #fff; border-color: var(--blue); font-weight: 600; }
+.wf-top .pill.solid::before { content: "+"; font-size: 16px; line-height: 1; }
+.wf-top .pill .cv { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid currentColor; opacity: 0.6; }
+
+/* ── Main canvas ─────────────────────────────── */
+.wf-main {
+  grid-area: main;
+  padding: 18px 22px 22px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* sketchy box */
+.box {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  position: relative;
+}
+.box.soft { border-color: var(--line-soft); }
+.box.dashed { border-style: dashed; }
+.box .corner { /* fake hand-drawn double-corner */
+  position: absolute; width: 8px; height: 8px;
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+}
+.box .corner.tl { top: -4px; left: -4px; border-radius: 50%; }
+.box .corner.tr { top: -4px; right: -4px; border-radius: 50%; }
+.box .corner.bl { bottom: -4px; left: -4px; border-radius: 50%; }
+.box .corner.br { bottom: -4px; right: -4px; border-radius: 50%; }
+
+.box-title {
+  font-family: var(--hand);
+  font-size: 19px; font-weight: 600;
+  padding: 8px 14px 0;
+  display: flex; align-items: baseline; gap: 8px;
+  letter-spacing: -0.01em;
+}
+.box-title small {
+  font-family: var(--sans);
+  font-size: 11px; color: var(--ink-3); font-weight: 400;
+  letter-spacing: 0;
+}
+.box-title .badge {
+  font-family: var(--sans);
+  font-size: 10px; font-weight: 700;
+  background: var(--yellow);
+  padding: 1px 6px; border-radius: 2px;
+  letter-spacing: 0;
+}
+.box-body { padding: 8px 14px 14px; }
+
+/* KPI tile */
+.kpi {
+  background: var(--paper);
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  padding: 10px 14px 12px;
+  position: relative;
+}
+.kpi .lbl {
+  font-family: var(--hand-2);
+  font-size: 12px; color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+.kpi .val {
+  font-family: var(--sans);
+  font-size: 26px; font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+.kpi .delta {
+  font-family: var(--hand);
+  font-size: 15px; color: var(--green);
+  margin-left: 6px; font-weight: 600;
+}
+.kpi .delta.down { color: var(--red); }
+.kpi .spark {
+  position: absolute; right: 12px; top: 14px;
+  width: 64px; height: 24px;
+}
+
+/* segmented chip row */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.chip {
+  font-family: var(--sans); font-size: 11px;
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--paper);
+  white-space: nowrap;
+}
+.chip.on { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip.blue { background: var(--blue); color: #fff; border-color: var(--blue); }
+.chip.ghost { border-style: dashed; color: var(--ink-3); border-color: var(--line-soft); }
+.chip .x { color: inherit; opacity: 0.5; margin-left: 4px; }
+
+.chip-hand {
+  font-family: var(--hand);
+  font-size: 14px; font-weight: 600;
+  padding: 2px 9px 3px;
+}
+
+/* Role badges (lifted from v1) */
+.role { font-family: var(--sans); font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px; border: 1.5px solid; }
+.role.admin { color: #6c3ad6; border-color: #6c3ad6; background: #f3edff; }
+.role.ops   { color: var(--blue); border-color: var(--blue); background: var(--blue-tint); }
+
+/* annotation flag */
+.note {
+  font-family: var(--hand);
+  font-size: 16px;
+  color: var(--blue-deep);
+  display: inline-flex; align-items: center; gap: 4px;
+  letter-spacing: -0.01em;
+}
+.note::before { content: "✱"; color: var(--blue); font-size: 14px; }
+
+/* arrow */
+.arrow {
+  position: absolute;
+  font-family: var(--hand);
+  color: var(--ink-2);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* highlight underline */
+.hl { background: linear-gradient(180deg, transparent 55%, var(--yellow) 55%, var(--yellow) 92%, transparent 92%); padding: 0 2px; }
+
+/* table */
+table.t { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.t th, table.t td {
+  text-align: left; padding: 6px 8px;
+  border-bottom: 1px solid var(--line-soft);
+}
+table.t th {
+  font-family: var(--hand-2); font-weight: 700;
+  background: rgba(0,0,0,0.025);
+  font-size: 11px; letter-spacing: 0.04em;
+  border-bottom: 1.5px solid var(--line);
+}
+
+/* heatmap cell */
+.hm { display: grid; gap: 2px; }
+.hm .cell {
+  font-family: var(--sans); font-size: 10px; font-weight: 600;
+  display: grid; place-items: center;
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+/* funnel stage */
+.stage {
+  border: 1.5px solid var(--line);
+  background: var(--paper);
+  padding: 10px 14px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+/* artboard label strip on canvas (in addition to DCArtboard's own label) */
+
+/* hand-drawn divider */
+.divr {
+  height: 0;
+  border-top: 1.5px dashed var(--line-soft);
+  margin: 6px 0;
+}
+
+/* Annotation arrow (svg-free) */
+.callout {
+  position: absolute;
+  font-family: var(--hand);
+  font-size: 15px;
+  color: var(--blue-deep);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  max-width: 200px;
+  line-height: 1.2;
+}
+.callout .lead { display:block; width: 30px; height: 16px; border-left: 1.5px solid var(--blue); border-bottom: 1.5px solid var(--blue); margin-bottom: 2px;}
+
+/* segmented control "toggle" */
+.toggle {
+  display: inline-flex; border: 1.5px solid var(--line); border-radius: 6px; overflow: hidden;
+  font-size: 11px;
+}
+.toggle span { padding: 4px 10px; border-right: 1.5px solid var(--line); background: var(--paper); }
+.toggle span:last-child { border-right: none; }
+.toggle span.on { background: var(--ink); color: var(--paper); font-weight: 600; }
+
+/* tag pill (lifted from v1) */
+.tag { display: inline-flex; gap: 4px; align-items: center; font-family: var(--sans); font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 3px; }
+.tag.green { background: #e6f8ee; color: var(--green); }
+.tag.red { background: #fde9e9; color: var(--red); }
+.tag.gray { background: #efeee9; color: var(--ink-2); }
+.tag.blue { background: var(--blue-tint); color: var(--blue-deep); }
+
+/* tiny icon button */
+.icobtn { width: 28px; height: 28px; border: 1.5px solid var(--line); border-radius: 5px; background: var(--paper); display: inline-grid; place-items: center; font-size: 14px; }
+
+/* ── Tweak-driven modifiers ────────────────────────── */
+html.no-grid .wf::before { display: none; }
+html.no-hl .hl { background: transparent; padding: 0; }
+html.no-hl .note { background: transparent; }
+
+/* Mid-fi: swap handwritten display fonts for sans, drop paper texture,
+   tighten the rough corners + dashed dividers. */
+html.fi-mid .wf-top .crumb,
+html.fi-mid .box-title,
+html.fi-mid .kpi .lbl,
+html.fi-mid .kpi .delta,
+html.fi-mid .note,
+html.fi-mid .chip-hand,
+html.fi-mid .arrow,
+html.fi-mid .callout,
+html.fi-mid .wf-side .sec,
+html.fi-mid .lbl {
+  font-family: var(--sans);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+html.fi-mid .wf-top .crumb { font-weight: 800; font-size: 17px; }
+html.fi-mid .box-title { font-size: 14px; font-weight: 700; padding-top: 12px; }
+html.fi-mid .kpi .delta { font-size: 12px; font-weight: 700; }
+html.fi-mid .wf { background: #ffffff; }
+html.fi-mid .wf::before { display: none; }
+html.fi-mid .box { border-radius: 8px; }
+html.fi-mid .kpi { border-radius: 8px; }
+html.fi-mid .stage { border-radius: 8px; }
+html.fi-mid .pill { border-radius: 6px; }
+html.fi-mid .chip { border-radius: 4px; font-weight: 600; }
+html.fi-mid .role { border-radius: 4px; }
+html.fi-mid .wf-side .nav a { border-radius: 6px; }
+html.fi-mid .box.dashed,
+html.fi-mid .wf-top { border-style: solid; }
+
+/* Highlight bg gets stronger in low-fi (no-hl already strips it). */
+.box-title small {
+  white-space: nowrap;
+}

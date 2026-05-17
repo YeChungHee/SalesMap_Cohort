@@ -1,0 +1,1232 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>세일즈맵 코호트 대시보드 v1.0</title>
+<style>
+:root {
+  --bg:#f0f2f5; --surface:#fff; --surface2:#f8fafc; --text:#1a2035;
+  --muted:#64748b; --line:#e2e8f0; --blue:#2563eb; --blue-soft:#eff6ff;
+  --green:#16a34a; --green-soft:#f0fdf4; --orange:#d97706; --orange-soft:#fffbeb;
+  --red:#dc2626; --red-soft:#fef2f2; --purple:#7c3aed; --purple-soft:#f5f3ff;
+  --sidebar:240px; --header:58px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:"Malgun Gothic","맑은 고딕",AppleGothic,-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;font-size:14px;line-height:1.5;display:flex;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+
+/* ── 사이드바 ── */
+#sidebar{width:var(--sidebar);background:#0f172a;color:#cbd5e1;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sb-brand{display:flex;gap:10px;align-items:center;padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sb-mark{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#2563eb,#16a34a);flex-shrink:0}
+.sb-name{font-weight:800;font-size:13px;color:#f1f5f9;letter-spacing:.01em}
+.sb-ver{font-size:11px;color:#64748b;margin-top:1px}
+.sb-nav{padding:12px 8px;flex:1}
+.sb-section{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#475569;padding:14px 8px 4px}
+.nav-btn{width:100%;background:none;border:none;color:#94a3b8;text-align:left;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;transition:background .15s,color .15s}
+.nav-btn .icon{width:16px;text-align:center;flex-shrink:0;font-size:14px}
+.nav-btn:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+.nav-btn.active{background:rgba(37,99,235,.25);color:#93c5fd}
+.sb-foot{padding:14px 14px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:12px;color:#64748b}
+.sb-foot strong{display:block;color:#cbd5e1;margin-bottom:2px}
+.sb-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;background:#22c55e}
+.sb-status-dot.warn{background:#f59e0b}
+.sb-status-dot.err{background:#ef4444}
+
+/* ── 상단 헤더 ── */
+#topbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);height:var(--header);display:flex;align-items:center;padding:0 24px;gap:16px}
+.topbar-title{font-weight:800;font-size:16px;flex:1}
+.topbar-title small{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+.topbar-controls{display:flex;gap:8px;align-items:center}
+select.ctrl,input.ctrl{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 10px;font-size:13px;height:34px;cursor:pointer}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 14px;font-size:13px;cursor:pointer;font-weight:600;height:34px;display:inline-flex;align-items:center;gap:5px;transition:background .15s}
+.btn:hover{background:#f8fafc}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.primary:hover{background:#1d4ed8}
+.btn.green{background:var(--green);border-color:var(--green);color:#fff}
+.role-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;border:1px solid}
+.role-admin{background:#fdf4ff;color:#7c3aed;border-color:#d8b4fe}
+.role-operations{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
+.role-investor{background:#f0fdf4;color:#166534;border-color:#86efac}
+.role-read_only{background:#f8fafc;color:#475569;border-color:#cbd5e1}
+
+/* ── 레이아웃 ── */
+#app{display:flex;flex:1;min-width:0}
+#main{flex:1;min-width:0;display:flex;flex-direction:column}
+#content{flex:1;padding:24px;overflow-x:hidden}
+.section{display:none}
+.section.active{display:block}
+.g{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.g-auto{grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr)}
+
+/* ── 카드 ── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.card-header h3{font-size:14px;font-weight:700;margin:0}
+.card-body{padding:16px 18px}
+.card-body.np{padding:0}
+
+/* ── KPI 카드 ── */
+.kpi{padding:16px;display:flex;flex-direction:column;gap:4px}
+.kpi-label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.02em}
+.kpi-value{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1}
+.kpi-sub{font-size:12px;color:var(--muted)}
+.kpi-delta{font-size:12px;font-weight:700}
+.kpi-delta.up{color:var(--green)}
+.kpi-delta.down{color:var(--red)}
+
+/* ── 테이블 ── */
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:middle;white-space:nowrap}
+th{color:var(--muted);font-size:12px;font-weight:700;background:var(--surface2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:#fafbff}
+
+/* ── 뱃지/필 ── */
+.pill{display:inline-flex;align-items:center;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;gap:4px}
+.pill-blue{background:#eff6ff;color:#1d4ed8}
+.pill-green{background:#f0fdf4;color:#166534}
+.pill-orange{background:#fffbeb;color:#92400e}
+.pill-red{background:#fef2f2;color:#991b1b}
+.pill-gray{background:#f3f4f6;color:#374151}
+.pill-purple{background:#f5f3ff;color:#5b21b6}
+.pill-dot::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:3px}
+
+/* ── 프로그레스바 ── */
+.bar{height:7px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+.bar-fill{height:100%;border-radius:999px;transition:width .4s}
+.bar-blue{background:var(--blue)}
+.bar-green{background:var(--green)}
+.bar-orange{background:var(--orange)}
+.bar-red{background:var(--red)}
+
+/* ── 깔때기(Funnel) SVG ── */
+.funnel-wrap{display:flex;flex-direction:column;gap:6px;padding:8px 0}
+.funnel-row{display:flex;align-items:center;gap:10px;font-size:13px}
+.funnel-label{width:64px;text-align:right;color:var(--muted);font-size:12px;flex-shrink:0}
+.funnel-bar{flex:1;height:32px;border-radius:4px;position:relative;display:flex;align-items:center;padding-left:10px;font-weight:700;font-size:13px;color:#fff;transition:width .4s}
+.funnel-rate{width:48px;text-align:right;font-size:12px;color:var(--muted);flex-shrink:0}
+
+/* ── 히트맵 ── */
+.heatmap-cell{display:inline-flex;align-items:center;justify-content:center;border-radius:4px;font-size:11px;font-weight:700;cursor:default;transition:filter .15s}
+.heatmap-cell:hover{filter:brightness(.92)}
+
+/* ── 스테이징 이벤트 ── */
+.staging-item{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--surface2)}
+.staging-item.manual{border-color:#fca5a5;background:#fff5f5}
+.staging-title{font-weight:700;font-size:13px;display:flex;align-items:center;gap:8px}
+.staging-meta{font-size:12px;color:var(--muted);margin-top:3px}
+.staging-actions{display:flex;gap:6px;margin-top:8px}
+.mini-btn{border:1px solid var(--line);background:#fff;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer}
+.mini-btn.approve{border-color:#86efac;color:var(--green);background:var(--green-soft)}
+.mini-btn.reject{border-color:#fca5a5;color:var(--red);background:var(--red-soft)}
+
+/* ── SLA 카운트다운 ── */
+.sla-card{display:flex;align-items:center;gap:14px;padding:14px 18px;border-radius:8px;background:var(--surface2);border:1px solid var(--line);margin-bottom:10px}
+.sla-icon{font-size:22px;flex-shrink:0}
+.sla-info{flex:1}
+.sla-name{font-weight:700;font-size:13px}
+.sla-period{font-size:12px;color:var(--muted)}
+.sla-countdown{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;color:var(--blue)}
+.sla-countdown.warn{color:var(--orange)}
+.sla-countdown.crit{color:var(--red)}
+
+/* ── Slack 메시지 ── */
+.slack-preview{background:#1a1d23;border-radius:8px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#b8c5d3;line-height:1.7;white-space:pre-wrap;word-break:break-all;min-height:200px}
+
+/* ── OCR 연동 상태 ── */
+.connection-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);font-size:13px}
+.connection-row:last-child{border-bottom:0}
+.conn-label{color:var(--muted);font-size:12px}
+.conn-value{font-weight:600}
+.conn-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.conn-ok{background:#dcfce7;color:#166534}
+.conn-warn{background:#fef9c3;color:#92400e}
+.conn-err{background:#fee2e2;color:#991b1b}
+
+/* ── RBAC 마스킹 ── */
+.investor-mask{filter:blur(4px);user-select:none;pointer-events:none}
+
+/* ── 빈 상태 ── */
+.empty{padding:28px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--line);border-radius:8px;background:var(--surface2)}
+
+/* ── 알림 토스트 ── */
+#toast{position:fixed;bottom:24px;right:24px;background:#1e293b;color:#f1f5f9;padding:12px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+#toast.show{opacity:1;transform:translateY(0)}
+
+@media(max-width:1100px){
+  #sidebar{display:none}
+  .g5{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .g-auto{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ── 사이드바 ── -->
+<div id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-mark"></div>
+    <div>
+      <div class="sb-name">SalesMap Cohort</div>
+      <div class="sb-ver">v1.0 · Phase 1</div>
+    </div>
+  </div>
+  <div class="sb-nav">
+    <div class="sb-section">분석</div>
+    <button class="nav-btn active" data-view="overview"><span class="icon">📊</span>대시보드</button>
+    <button class="nav-btn" data-view="cohort"><span class="icon">📅</span>코호트 분석</button>
+    <button class="nav-btn" data-view="pipeline"><span class="icon">🔀</span>파이프라인</button>
+    <div class="sb-section">운영</div>
+    <button class="nav-btn" data-view="quality"><span class="icon">🔍</span>데이터 품질</button>
+    <button class="nav-btn" data-view="sla"><span class="icon">🕐</span>보고서 &amp; 알림</button>
+    <button class="nav-btn" data-view="ledger"><span class="icon">📋</span>이벤트 원장</button>
+    <div class="sb-section">설정</div>
+    <button class="nav-btn" data-view="settings"><span class="icon">⚙️</span>연동 설정</button>
+  </div>
+  <div class="sb-foot">
+    <strong id="sb-slack-user">@예충희</strong>Slack 수신자
+    <div style="margin-top:10px">
+      <span class="sb-status-dot" id="sb-ocr-dot"></span>
+      <span id="sb-ocr-label">OCR Pro 연동 확인 중</span>
+    </div>
+    <div style="margin-top:6px">다음: <strong id="sb-next-report">금요일 16:30</strong></div>
+  </div>
+</div>
+
+<div id="main">
+  <!-- ── 상단 헤더 ── -->
+  <div id="topbar">
+    <div class="topbar-title">
+      세일즈맵 코호트 대시보드
+      <small id="topbar-asof"></small>
+    </div>
+    <div class="topbar-controls">
+      <select class="ctrl" id="ctrl-role">
+        <option value="admin">👑 관리자 (admin)</option>
+        <option value="operations" selected>⚙️ 운영 (operations)</option>
+        <option value="investor">📈 투자자 (investor)</option>
+        <option value="read_only">👁 읽기 전용</option>
+      </select>
+      <select class="ctrl" id="ctrl-period">
+        <option value="2026-05">2026년 5월</option>
+        <option value="2026-04">2026년 4월</option>
+        <option value="2026-03">2026년 3월</option>
+        <option value="2026-Q2">2026 Q2</option>
+        <option value="2026-Q1">2026 Q1</option>
+      </select>
+      <select class="ctrl" id="ctrl-source">
+        <option value="all">전체 유입</option>
+        <option value="business_card">명함</option>
+        <option value="expo">전시회</option>
+        <option value="url">URL</option>
+        <option value="salesmap_search">SalesMap 검색</option>
+      </select>
+      <button class="btn" id="btn-refresh">↺ 갱신</button>
+      <button class="btn primary" id="btn-slack">Slack 통보</button>
+      <span class="role-badge role-operations" id="role-badge">operations</span>
+    </div>
+  </div>
+
+  <!-- ── 콘텐츠 ── -->
+  <div id="content">
+
+    <!-- ══════ 대시보드 ══════ -->
+    <div class="section active" id="view-overview">
+      <div class="g g5" id="kpi-grid" style="margin-bottom:16px"></div>
+      <div class="g g-auto">
+        <div class="card">
+          <div class="card-header"><h3>코호트 전환 현황</h3><span class="pill pill-gray" id="cohort-period-label">2026년 5월</span></div>
+          <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>결제 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>전환 깔때기</h3></div>
+          <div class="card-body" id="funnel-wrap"></div>
+        </div>
+      </div>
+      <div class="g g2" style="margin-top:16px">
+        <div class="card">
+          <div class="card-header"><h3>보고서 데이터 신선도</h3><span class="pill pill-green pill-dot" id="freshness-pill">validated</span></div>
+          <div class="card-body np" id="freshness-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>고객 유형 분포</h3><span class="pill pill-gray">이번 기간</span></div>
+          <div class="card-body" id="customer-type-chart"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 코호트 분석 ══════ -->
+    <div class="section" id="view-cohort">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><h3>월별 × 유입경로 코호트 히트맵</h3><span class="pill pill-gray">딜 전환율 기준</span></div>
+        <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
+      </div>
+      <div class="g g2">
+        <div class="card">
+          <div class="card-header"><h3>코호트별 영업 사이클 (일)</h3><span class="pill pill-blue">성사 딜 기준</span></div>
+          <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>P50</th><th>P75</th><th>P90</th><th>최대</th><th>이상치</th></tr></thead><tbody id="cycle-rows"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>재활성화/리텐션 추이</h3></div>
+          <div class="card-body" id="retention-chart"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 파이프라인 ══════ -->
+    <div class="section" id="view-pipeline">
+      <div class="g g3" id="pipeline-cards" style="margin-bottom:16px"></div>
+      <div class="g g2">
+        <div class="card">
+          <div class="card-header"><h3>단계 체류 시간</h3><span class="pill pill-blue">P50 / P75 / P90 (시간)</span></div>
+          <div class="card-body np tw"><table><thead><tr><th>파이프라인</th><th>단계</th><th>P50</th><th>P75</th><th>P90</th><th>정체</th><th>위험도</th></tr></thead><tbody id="velocity-rows"></tbody></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>단계 역행(Regression)</h3><span class="pill pill-orange">비즈니스 리스크</span></div>
+          <div class="card-body np tw"><table><thead><tr><th>회사</th><th>from</th><th>to</th><th>발생일</th><th>횟수</th></tr></thead><tbody id="regression-rows"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 데이터 품질 ══════ -->
+    <div class="section" id="view-quality">
+      <div class="g g4" id="quality-kpi" style="margin-bottom:16px"></div>
+      <div class="g g2">
+        <div class="card">
+          <div class="card-header"><h3>스테이징 이벤트 검토 대기</h3><span class="pill pill-orange pill-dot" id="staging-count-badge">0건</span></div>
+          <div class="card-body" id="staging-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>필수 플래그 현황</h3><span class="pill pill-gray">캠페인 제외 영향</span></div>
+          <div class="card-body" id="flags-list"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><h3>소스 품질 점수 분포</h3><span class="pill pill-gray">100점 기준</span></div>
+        <div class="card-body" id="quality-chart"></div>
+      </div>
+    </div>
+
+    <!-- ══════ 보고서 & 알림 ══════ -->
+    <div class="section" id="view-sla">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header"><h3>정기 보고서 SLA 현황</h3>
+          <div style="display:flex;gap:6px">
+            <button class="btn" id="btn-sim-delay">지연 시뮬레이션</button>
+            <button class="btn" id="btn-sim-fail">실패 시뮬레이션</button>
+            <button class="btn green" id="btn-reset-sla">초기화</button>
+          </div>
+        </div>
+        <div id="sla-cards" style="padding:14px 18px"></div>
+      </div>
+      <div class="g g2">
+        <div class="card">
+          <div class="card-header"><h3>Slack 통보 메시지</h3><span class="pill pill-blue">@예충희</span></div>
+          <div class="card-body">
+            <div class="slack-preview" id="slack-preview"></div>
+            <div style="display:flex;gap:8px;margin-top:12px">
+              <button class="btn primary" id="btn-copy-slack">메시지 복사</button>
+              <button class="btn" id="btn-mark-sent">통보 완료 기록</button>
+              <select class="ctrl" id="select-status" style="height:34px">
+                <option value="validated">validated</option>
+                <option value="delayed">delayed</option>
+                <option value="failed">failed</option>
+                <option value="partial">partial</option>
+                <option value="retrying">retrying</option>
+                <option value="escalated">escalated</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>통보 이력</h3><button class="btn" id="btn-clear-history" style="font-size:12px;height:28px;padding:0 10px">초기화</button></div>
+          <div class="card-body" id="notify-history"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 이벤트 원장 ══════ -->
+    <div class="section" id="view-ledger">
+      <div class="card">
+        <div class="card-header">
+          <h3>코호트 이벤트 원장</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="ctrl" id="ledger-filter" style="height:30px;font-size:12px">
+              <option value="all">전체</option>
+              <option value="validated">validated</option>
+              <option value="staging">staging</option>
+            </select>
+            <span class="pill pill-gray">SHA-256 fingerprint</span>
+          </div>
+        </div>
+        <div class="card-body np tw">
+          <table><thead><tr><th>시각 (KST)</th><th>회사</th><th>이벤트 타입</th><th>파이프라인</th><th>금액</th><th>상태</th><th>fingerprint (앞16자)</th></tr></thead><tbody id="ledger-rows"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 연동 설정 ══════ -->
+    <div class="section" id="view-settings">
+      <div class="g g2">
+        <div class="card">
+          <div class="card-header"><h3>OCR Pro 설정값 연동</h3><span class="pill pill-orange pill-dot" id="ocr-status-badge">확인 중</span></div>
+          <div class="card-body">
+            <div id="ocr-connections"></div>
+            <div style="display:flex;gap:8px;margin-top:14px">
+              <button class="btn primary" id="btn-ocr-sync">설정값 다시 읽기</button>
+            </div>
+            <div style="margin-top:16px;padding:12px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#92400e">
+              <strong style="display:block;margin-bottom:4px">⚠ Phase 1 발견 — 강한 결합 구조</strong>
+              세일즈맵 API는 OCR Pro 설정값(API Key, 데이터 매핑, 식별자)을 직접 공유합니다. OCR Pro API Key 순환 시 대시보드 수집 파이프라인도 영향을 받습니다.
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Slack &amp; 수신자 설정</h3></div>
+          <div class="card-body">
+            <div class="connection-row">
+              <div><div class="conn-label">Slack 수신자</div><input id="inp-slack-user" style="border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:13px;width:200px;margin-top:4px" value="@예충희"></div>
+            </div>
+            <div class="connection-row">
+              <div><div class="conn-label">Slack User ID <span style="color:var(--orange)">(Phase 1 확인 필요)</span></div><input id="inp-slack-id" style="border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:13px;width:200px;margin-top:4px" placeholder="U0XXXXXXX"></div>
+            </div>
+            <div class="connection-row">
+              <div><div class="conn-label">OCR Pro 매핑 버전 해시</div><input id="inp-mapping-hash" style="border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:13px;width:200px;margin-top:4px" placeholder="Phase 1 조사 중" readonly></div>
+            </div>
+            <div style="margin-top:14px">
+              <button class="btn primary" id="btn-save-settings">설정 저장</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><h3>Phase 2 착수 게이트 현황</h3><span class="pill pill-orange">29개 항목</span></div>
+        <div class="card-body np tw">
+          <table><thead><tr><th>#</th><th>조건</th><th>분류</th><th>상태</th></tr></thead><tbody id="gate-rows"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  유틸리티
+// ══════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString("ko-KR");
+const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "–";
+const now = () => new Date().toLocaleString("ko-KR");
+
+function toast(msg, ms = 2200) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), ms);
+}
+
+async function sha256hex(str) {
+  if (!window.crypto?.subtle) {
+    let h = 0;
+    for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+    return "local" + Math.abs(h).toString(16).padStart(8, "0").repeat(2);
+  }
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function eventFingerprint(ev) {
+  // stable JSON stringify: keys alphabetically sorted, null stays null
+  const keys = ["amount", "entity_id", "entity_type", "event_at_utc", "event_type", "from_stage_id", "to_stage_id"];
+  const payload = {};
+  keys.forEach(k => { payload[k] = ev[k] ?? null; });
+  return (await sha256hex(JSON.stringify(payload))).slice(0, 16);
+}
+
+function maskText(str) {
+  if (!str) return "–";
+  return "●".repeat(Math.min(str.length, 8));
+}
+
+function pill(text, cls) {
+  return `<span class="pill pill-${cls}">${text}</span>`;
+}
+
+function statusPill(s) {
+  const map = { validated:"green", delayed:"orange", failed:"red", partial:"orange", retrying:"blue", escalated:"red", scheduled:"gray", collecting:"blue", aggregating:"blue", staging:"orange", auto:"blue", manual:"orange" };
+  return pill(s, map[s] || "gray");
+}
+
+// ══════════════════════════════════════════════
+//  OCR Pro localStorage 연동
+// ══════════════════════════════════════════════
+function readOcrSettings() {
+  return {
+    workerUrl:     localStorage.getItem("ocr_worker_url") || "",
+    salesmapToken: localStorage.getItem("ocr_salesmap_token") || "",
+    biznoKey:      localStorage.getItem("ocr_bizno_key") || "",
+    ntsKey:        localStorage.getItem("ocr_nts_key") || "",
+    geminiKey:     localStorage.getItem("ocr_gemini_key") || localStorage.getItem("ocr_gcloud_key") || "",
+    visionKey:     localStorage.getItem("ocr_vision_key") || localStorage.getItem("ocr_gcloud_key") || "",
+    mappingHash:   localStorage.getItem("ocr_mapping_hash") || ""
+  };
+}
+
+function salesmapConfig() {
+  const o = readOcrSettings();
+  return {
+    baseUrl: "https://salesmap.kr/api",
+    workerUrl: o.workerUrl,
+    token: o.salesmapToken,
+    useWorker: Boolean(o.workerUrl),
+    mappingHash: o.mappingHash,
+    ready: Boolean(o.workerUrl && o.salesmapToken)
+  };
+}
+
+// ══════════════════════════════════════════════
+//  앱 상태
+// ══════════════════════════════════════════════
+const STATE = {
+  role: "operations",
+  period: "2026-05",
+  source: "all",
+  settings: JSON.parse(localStorage.getItem("cohortSettings") || "{}"),
+  slaOverride: {},   // reportType → status override
+  stagingReviewed: new Set(),
+
+  /* ─ 목업 데이터 ─ */
+  cohortsBySource: [
+    { source:"business_card", label:"명함",            input:182, leads:139, deals:48, paid:17, new_:112, retention:49, reactivated:21 },
+    { source:"expo",          label:"전시회",           input:420, leads:266, deals:91, paid:31, new_:290, retention:88, reactivated:42 },
+    { source:"url",           label:"URL",             input:88,  leads:54,  deals:19, paid:6,  new_:61,  retention:19,  reactivated:8  },
+    { source:"salesmap_search",label:"SalesMap 검색",  input:64,  leads:41,  deals:16, paid:4,  new_:40,  retention:16,  reactivated:8  }
+  ],
+
+  monthlyCohort: [
+    { month:"2025-12", bc:[142,88,30,9],  expo:[355,218,70,20], url:[62,38,11,3],  sm:[48,29,10,2]  },
+    { month:"2026-01", bc:[158,115,41,13],expo:[380,238,80,26], url:[72,46,15,4],  sm:[54,35,12,3]  },
+    { month:"2026-02", bc:[169,126,44,14],expo:[395,250,84,27], url:[79,50,17,5],  sm:[58,37,13,3]  },
+    { month:"2026-03", bc:[175,131,46,15],expo:[408,258,87,29], url:[83,52,18,5],  sm:[61,39,14,4]  },
+    { month:"2026-04", bc:[180,136,47,16],expo:[415,263,89,30], url:[86,53,18,5],  sm:[63,40,15,4]  },
+    { month:"2026-05", bc:[182,139,48,17],expo:[420,266,91,31], url:[88,54,19,6],  sm:[64,41,16,4]  }
+  ],
+
+  cycles: [
+    { source:"명함",           p50:18, p75:31, p90:52, max:98,  outlier:2 },
+    { source:"전시회",         p50:14, p75:24, p90:41, max:83,  outlier:3 },
+    { source:"URL",           p50:22, p75:38, p90:64, max:120, outlier:4 },
+    { source:"SalesMap 검색", p50:11, p75:19, p90:33, max:71,  outlier:1 }
+  ],
+
+  velocity: [
+    { pipe:"유입",  stage:"추출 대기",       p50:1.2, p75:2.4, p90:4.1, stuck:3,  risk:"low"    },
+    { pipe:"유입",  stage:"SalesMap 등록",   p50:2.0, p75:3.8, p90:6.5, stuck:5,  risk:"medium" },
+    { pipe:"리드",  stage:"초기 접촉",        p50:20,  p75:36,  p90:58,  stuck:12, risk:"medium" },
+    { pipe:"리드",  stage:"유효화",           p50:35,  p75:58,  p90:91,  stuck:9,  risk:"medium" },
+    { pipe:"리드",  stage:"딜 전환 검토",     p50:48,  p75:80,  p90:124, stuck:6,  risk:"high"   },
+    { pipe:"딜",   stage:"제안",             p50:56,  p75:92,  p90:148, stuck:7,  risk:"medium" },
+    { pipe:"딜",   stage:"계약/결제",        p50:88,  p75:141, p90:220, stuck:4,  risk:"high"   }
+  ],
+
+  regressions: [
+    { company:"(주)슈니테크",   from:"계약/결제", to:"제안",       date:"2026-05-14", count:1 },
+    { company:"큐엠큐주식회사", from:"유효화",    to:"초기 접촉",  date:"2026-05-09", count:2 },
+    { company:"제로코퍼레이션", from:"제안",      to:"유효화",     date:"2026-05-03", count:1 }
+  ],
+
+  staging: [
+    { id:"stg-001", company:"INNOS",        event:"payment_due",       reason:"payment_status 충돌",                    type:"manual",  confidence:"low" },
+    { id:"stg-002", company:"기술보증기금",  event:"email_sent",         reason:"event_at_utc 누락 (source_updated_at 있음)", type:"auto",   confidence:"low" },
+    { id:"stg-003", company:"(주)에이아이랩", event:"deal_created",     reason:"동일 회사 후보 2개",                     type:"manual",  confidence:"low" },
+    { id:"stg-004", company:"넥스트솔루션",  event:"source_quality_updated", reason:"amount 포맷 불일치 (정규화 가능)", type:"auto",   confidence:"low" },
+    { id:"stg-005", company:"테크빌",        event:"funding_executed",  reason:"funding 금액 불일치",                    type:"manual",  confidence:"low" }
+  ],
+
+  flags: [
+    { flag:"has_email",          total:754, missing:89,  label:"이메일" },
+    { flag:"has_business_number",total:754, missing:43,  label:"사업자번호" },
+    { flag:"has_phone",          total:754, missing:127, label:"전화번호" },
+    { flag:"has_company_name",   total:754, missing:12,  label:"회사명" }
+  ],
+
+  qualityDist: [
+    { range:"80–100 (high)",   count:312, color:"#16a34a" },
+    { range:"50–79 (medium)",  count:285, color:"#d97706" },
+    { range:"0–49 (low)",      count:157, color:"#dc2626" }
+  ],
+
+  slaJobs: [
+    { id:"daily",     label:"일일",  period:"전일 00:00 ~ 23:59",                 cutoff:"익일 08:00",  publish:"익일 09:00",        status:"validated" },
+    { id:"weekly",    label:"주간",  period:"전주 금 16:00:01 ~ 당주 금 16:00:00", cutoff:"금 16:05",   publish:"금 16:30",           status:"validated" },
+    { id:"monthly",   label:"월간",  period:"전월 1일 ~ 전월 말일",                cutoff:"매월 1일 08:00", publish:"매월 1일 09:00",  status:"scheduled" },
+    { id:"quarterly", label:"분기",  period:"분기 종료월 말일 기준",               cutoff:"보고월 1일 08:00", publish:"Q1~Q3: 다음달 1일 / Q4: 1월 3일 09:00", status:"scheduled" },
+    { id:"annual",    label:"연간",  period:"전년 1월 1일 ~ 12월 31일",            cutoff:"1월 4일 08:00",  publish:"1월 4일 09:00",   status:"scheduled" }
+  ],
+
+  events: [
+    { at:"2026-05-17 09:02", company:"큐엠큐주식회사",   event_type:"lead_created",        entity_type:"lead",    amount:null,   from_stage_id:null,   to_stage_id:"lead_01",  status:"validated" },
+    { at:"2026-05-17 09:14", company:"(주)슈니테크",      event_type:"deal_stage_changed",  entity_type:"deal",    amount:null,   from_stage_id:"d_02", to_stage_id:"d_03",     status:"validated" },
+    { at:"2026-05-17 10:20", company:"기술보증기금",       event_type:"email_opened",        entity_type:"activity",amount:null,   from_stage_id:null,   to_stage_id:null,       status:"validated" },
+    { at:"2026-05-17 11:05", company:"INNOS",             event_type:"payment_due",         entity_type:"payment", amount:5800000,from_stage_id:null,   to_stage_id:null,       status:"staging"   },
+    { at:"2026-05-17 12:30", company:"제로코퍼레이션",    event_type:"funding_executed",    entity_type:"funding", amount:120000000,from_stage_id:null, to_stage_id:null,       status:"validated" },
+    { at:"2026-05-16 15:48", company:"테크빌",            event_type:"deal_created",        entity_type:"deal",    amount:null,   from_stage_id:null,   to_stage_id:"d_01",     status:"validated" },
+    { at:"2026-05-16 16:10", company:"넥스트솔루션",      event_type:"payment_received",    entity_type:"payment", amount:3200000,from_stage_id:null,   to_stage_id:null,       status:"validated" },
+    { at:"2026-05-15 11:25", company:"(주)에이아이랩",    event_type:"deal_stage_changed",  entity_type:"deal",    amount:null,   from_stage_id:"d_03", to_stage_id:"d_02",     status:"staging"   }
+  ],
+
+  gate: [
+    { n:1,  desc:"event_fingerprint SHA-256 해시 기준 확정",            cat:"데이터 모델",   done:true  },
+    { n:2,  desc:"batch_run_id UUID 생성 규칙 확정",                     cat:"수집",         done:true  },
+    { n:3,  desc:"fact_cohort_event 전체 필드 목록 확정",                cat:"데이터 모델",   done:true  },
+    { n:4,  desc:"event_type 열거값 22개 확정",                          cat:"데이터 모델",   done:true  },
+    { n:5,  desc:"cohort_key KST 기준 생성 규칙 확정",                   cat:"데이터 모델",   done:true  },
+    { n:6,  desc:"attribution 규칙 (first_touch/last_touch/manual) 확정",cat:"코호트",       done:true  },
+    { n:7,  desc:"고객 유형 전환 조건 (90일 규칙) 확정",                  cat:"코호트",       done:true  },
+    { n:8,  desc:"dim_company_history 업데이트 트리거 확정",              cat:"데이터 모델",   done:true  },
+    { n:9,  desc:"RBAC 4개 역할 및 마스킹 레이어 위치 확정",              cat:"보안",         done:true  },
+    { n:10, desc:"is_regression 플래그 기준 확정",                        cat:"데이터 모델",   done:true  },
+    { n:11, desc:"payment_status enum 확정",                             cat:"데이터 모델",   done:true  },
+    { n:12, desc:"installment 결제 구조 확정",                            cat:"데이터 모델",   done:true  },
+    { n:13, desc:"source_quality_score 100점 채점 기준 확정",             cat:"품질",         done:true  },
+    { n:14, desc:"staging_event 자동승인/수동검토 조건 분리 확정",          cat:"품질",         done:true  },
+    { n:15, desc:"fingerprint_confidence=low 격리 규칙 확정",             cat:"품질",         done:true  },
+    { n:16, desc:"분기/연간 보고서 공휴일 및 snapshot 규칙 확정",          cat:"보고서 SLA",   done:true  },
+    { n:17, desc:"report_refresh_job 알림/재처리/에스컬레이션 필드 확정",  cat:"보고서 SLA",   done:true  },
+    { n:18, desc:"에스컬레이션 레벨 0~3 조건 및 연락처 확정",              cat:"보고서 SLA",   done:true  },
+    { n:19, desc:"이메일 필수 플래그 및 캠페인 제외 규칙 확정",             cat:"품질",         done:true  },
+    { n:20, desc:"stable_json_stringify 표준 (Node.js/Python) 확정",     cat:"데이터 모델",   done:true  },
+    { n:21, desc:"phone_type enum 확정",                                 cat:"데이터 모델",   done:true  },
+    { n:22, desc:"공휴일 관리 Phase별 구현 방식 확정",                    cat:"보고서 SLA",   done:true  },
+    { n:23, desc:"주간 보고서 수집 16:05, 배포 16:30 KST 확정",           cat:"보고서 SLA",   done:true  },
+    { n:24, desc:"Slack 수신자 @예충희 (user_id Phase 1 확인 중)",        cat:"알림",         done:false },
+    { n:25, desc:"Slack 통보 5개 보고서 × 전체 상태 이벤트 커버리지 확정", cat:"알림",         done:true  },
+    { n:26, desc:"OCR Pro API Key 순환 정책 확인 및 연쇄 영향 대응 확정",  cat:"Phase 1 신규", done:false },
+    { n:27, desc:"OCR Pro 매핑 설정 버전 감지 메커니즘 확인",              cat:"Phase 1 신규", done:false },
+    { n:28, desc:"source_record_id OCR Pro ID 파생 구조 문서화 및 불변 보장 확정", cat:"Phase 1 신규", done:false },
+    { n:29, desc:"OCR Pro 매핑 변경 시 수집 중단/격리 규칙 확정",          cat:"Phase 1 신규", done:false }
+  ]
+};
+
+// ══════════════════════════════════════════════
+//  헬퍼
+// ══════════════════════════════════════════════
+function filteredCohorts() {
+  if (STATE.source === "all") return STATE.cohortsBySource;
+  return STATE.cohortsBySource.filter(c => c.source === STATE.source);
+}
+
+function cohortTotals() {
+  return filteredCohorts().reduce((a, c) => ({
+    input: a.input + c.input,
+    leads: a.leads + c.leads,
+    deals: a.deals + c.deals,
+    paid:  a.paid  + c.paid,
+    new_:  a.new_  + c.new_,
+    retention: a.retention + c.retention,
+    reactivated: a.reactivated + c.reactivated
+  }), { input:0, leads:0, deals:0, paid:0, new_:0, retention:0, reactivated:0 });
+}
+
+function isInvestor() { return STATE.role === "investor"; }
+function maskIfInvestor(str) { return isInvestor() ? `<span class="investor-mask">${str}</span>` : str; }
+
+// ══════════════════════════════════════════════
+//  SVG 미니 차트
+// ══════════════════════════════════════════════
+function svgBar(data, w, h, color) {
+  const max = Math.max(...data.map(d => d.v), 1);
+  const bw = (w - (data.length - 1) * 4) / data.length;
+  const bars = data.map((d, i) => {
+    const bh = Math.max((d.v / max) * (h - 20), 2);
+    const x = i * (bw + 4);
+    const y = h - 20 - bh;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${color}" opacity=".85"/>
+      <text x="${(x + bw/2).toFixed(1)}" y="${(h - 4)}" text-anchor="middle" font-size="10" fill="#64748b">${d.l}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
+}
+
+// ══════════════════════════════════════════════
+//  렌더 함수들
+// ══════════════════════════════════════════════
+
+// KPI
+function renderKPI() {
+  const t = cohortTotals();
+  const dealRate = t.input ? (t.deals / t.input * 100).toFixed(1) : 0;
+  const payRate  = t.deals ? (t.paid  / t.deals * 100).toFixed(1) : 0;
+  const avgCycle = 16.4;
+  const cards = [
+    { label:"총 유입",        value:fmt(t.input),        sub:"이번 기간 누적",           delta:"▲ 3.2%", dir:"up"   },
+    { label:"리드 전환",       value:fmt(t.leads),        sub:`전환율 ${pct(t.leads,t.input)}`, delta:"▲ 1.8%", dir:"up" },
+    { label:"딜 성사",         value:fmt(t.deals),        sub:`유입 대비 ${dealRate}%`,    delta:"▲ 0.9%", dir:"up"   },
+    { label:"결제 완료",       value:fmt(t.paid),         sub:`딜 대비 ${payRate}%`,       delta:"▼ 0.4%", dir:"down" },
+    { label:"평균 영업 사이클", value:`${avgCycle}일`,     sub:"성사 딜 P50 기준",          delta:"▼ 1.2일", dir:"up"  }
+  ];
+  $("kpi-grid").innerHTML = cards.map(c => `
+    <div class="card kpi">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value">${c.value}</div>
+      <div class="kpi-sub">${c.sub}</div>
+      <div class="kpi-delta ${c.dir}">${c.delta}</div>
+    </div>`).join("");
+}
+
+// 코호트 테이블
+function renderCohortTable() {
+  const cols = filteredCohorts();
+  $("cohort-rows").innerHTML = cols.map(c => {
+    const dr = c.input ? (c.deals/c.input*100).toFixed(1) : 0;
+    const barW = Math.min(Number(dr), 100);
+    const custBreak = `${Math.round(c.new_/c.input*100)}% 신규`;
+    return `<tr>
+      <td>${c.label}</td>
+      <td>${fmt(c.input)}</td>
+      <td>${fmt(c.leads)} <span style="color:var(--muted);font-size:11px">(${pct(c.leads,c.input)})</span></td>
+      <td>${fmt(c.deals)} <span style="color:var(--muted);font-size:11px">(${pct(c.deals,c.input)})</span></td>
+      <td>${isInvestor() ? fmt(c.paid) : maskIfInvestor(fmt(c.paid))}</td>
+      <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
+      <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>
+    </tr>`;
+  }).join("");
+  $("cohort-period-label").textContent = STATE.period;
+}
+
+// 깔때기
+function renderFunnel() {
+  const t = cohortTotals();
+  const steps = [
+    { label:"유입",  value:t.input, color:"#2563eb" },
+    { label:"리드",  value:t.leads, color:"#7c3aed" },
+    { label:"딜",    value:t.deals, color:"#16a34a" },
+    { label:"결제",  value:t.paid,  color:"#d97706" }
+  ];
+  const max = steps[0].value || 1;
+  $("funnel-wrap").innerHTML = `<div class="funnel-wrap">${steps.map((s,i) => {
+    const w = Math.max((s.value / max) * 100, 4);
+    const rate = i > 0 ? ` (${pct(s.value, steps[i-1].value)})` : "";
+    return `<div class="funnel-row">
+      <span class="funnel-label">${s.label}</span>
+      <div style="flex:1;position:relative">
+        <div style="height:32px;border-radius:4px;background:${s.color};width:${w}%;min-width:40px;display:flex;align-items:center;padding-left:10px;font-size:13px;font-weight:700;color:#fff;transition:width .4s">
+          ${fmt(s.value)}${rate}
+        </div>
+      </div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// 신선도
+function renderFreshness() {
+  const jobs = STATE.slaJobs.slice(0, 3);
+  const active = jobs.find(j => j.id === "weekly") || jobs[0];
+  const sc = active.status === "validated" ? "green" : active.status === "delayed" ? "orange" : "red";
+  $("freshness-pill").className = `pill pill-${sc} pill-dot`;
+  $("freshness-pill").textContent = active.status;
+
+  $("freshness-list").innerHTML = STATE.slaJobs.map(j => {
+    const ov = STATE.slaOverride[j.id];
+    const st = ov || j.status;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--line)">
+      <div>
+        <div style="font-weight:700;font-size:13px">${j.label} 보고서</div>
+        <div style="font-size:11px;color:var(--muted)">${j.period}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:var(--muted)">${j.publish}</span>
+        ${statusPill(st)}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// 고객 유형
+function renderCustomerType() {
+  const t = cohortTotals();
+  const total = t.new_ + t.retention + t.reactivated || 1;
+  const items = [
+    { label:"신규",    value:t.new_,        color:var_("--blue"),   pct: (t.new_/total*100).toFixed(0) },
+    { label:"리텐션",  value:t.retention,   color:var_("--green"),  pct: (t.retention/total*100).toFixed(0) },
+    { label:"재활성화", value:t.reactivated, color:var_("--orange"), pct: (t.reactivated/total*100).toFixed(0) }
+  ];
+  $("customer-type-chart").innerHTML = items.map(it => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:10px;height:10px;border-radius:50%;background:${it.color};flex-shrink:0"></div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>${it.label}</span><span style="font-weight:700">${fmt(it.value)} (${it.pct}%)</span>
+        </div>
+        <div class="bar"><div class="bar-fill" style="width:${it.pct}%;background:${it.color}"></div></div>
+      </div>
+    </div>`).join("");
+}
+
+function var_(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
+    ({  "--blue":"#2563eb","--green":"#16a34a","--orange":"#d97706" })[name] || "#888";
+}
+
+// 코호트 히트맵
+function renderHeatmap() {
+  const sources = [
+    { key:"bc",  label:"명함" },
+    { key:"expo",label:"전시회" },
+    { key:"url", label:"URL" },
+    { key:"sm",  label:"SM검색" }
+  ];
+  const srcMap = { bc:0, expo:1, url:2, sm:3 };
+
+  let html = `<table style="border-collapse:separate;border-spacing:4px"><thead><tr><th style="text-align:left;font-size:12px;color:var(--muted);padding:4px 8px">월</th>`;
+  sources.forEach(s => { html += `<th style="font-size:12px;color:var(--muted);padding:4px 10px">${s.label}</th>`; });
+  html += `</tr></thead><tbody>`;
+
+  STATE.monthlyCohort.forEach(row => {
+    html += `<tr><td style="font-size:12px;color:var(--muted);padding:4px 8px;white-space:nowrap">${row.month}</td>`;
+    sources.forEach(s => {
+      const arr = row[s.key];
+      if (!arr) { html += `<td></td>`; return; }
+      const [input,,deals] = arr;
+      const rate = input ? (deals/input*100) : 0;
+      const [bg, tc] = rate > 22 ? ["#166534","#fff"] : rate > 16 ? ["#16a34a","#fff"] : rate > 10 ? ["#86efac","#166534"] : rate > 5 ? ["#fde68a","#92400e"] : ["#fee2e2","#991b1b"];
+      html += `<td><div class="heatmap-cell" style="width:72px;height:36px;background:${bg};color:${tc}" title="${row.month} ${s.label}: ${rate.toFixed(1)}%">${rate.toFixed(1)}%</div></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  html += `<div style="margin-top:12px;display:flex;gap:12px;font-size:11px;color:var(--muted)">
+    <span>■ <span style="color:#166534">22%+</span></span>
+    <span>■ <span style="color:#16a34a">16%+</span></span>
+    <span>■ <span style="color:#92400e">10%+</span></span>
+    <span>■ <span style="color:#d97706">5%+</span></span>
+    <span>■ <span style="color:#dc2626">~5%</span></span>
+  </div>`;
+  $("heatmap-wrap").innerHTML = html;
+}
+
+// 영업 사이클
+function renderCycles() {
+  $("cycle-rows").innerHTML = STATE.cycles.map(c => `<tr>
+    <td>${c.source}</td>
+    <td><strong>${c.p50}일</strong></td>
+    <td>${c.p75}일</td>
+    <td>${c.p90}일</td>
+    <td style="color:var(--muted)">${c.max}일</td>
+    <td>${c.outlier > 2 ? `<span style="color:var(--red);font-weight:700">${c.outlier}</span>` : c.outlier}</td>
+  </tr>`).join("");
+}
+
+// 리텐션 차트
+function renderRetention() {
+  const data = [
+    { l:"12월", v:63 }, { l:"1월", v:71 }, { l:"2월", v:79 },
+    { l:"3월", v:85 }, { l:"4월", v:91 }, { l:"5월", v:88 }
+  ];
+  $("retention-chart").innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">재구매(리텐션 + 재활성화) 건수</div>
+    ${svgBar(data, 340, 100, "#7c3aed")}
+    <div style="margin-top:8px;font-size:12px;color:var(--muted)">최근 6개월 추이 — 5월 일부 기간 포함</div>`;
+}
+
+// 스테이지 체류
+function renderVelocity() {
+  $("velocity-rows").innerHTML = STATE.velocity.map(v => {
+    const rc = v.risk === "high" ? "red" : v.risk === "medium" ? "orange" : "green";
+    return `<tr>
+      <td>${pill(v.pipe,"gray")}</td>
+      <td>${v.stage}</td>
+      <td><strong>${v.p50}h</strong></td>
+      <td>${v.p75}h</td>
+      <td>${v.p90}h</td>
+      <td>${v.stuck > 8 ? `<span style="color:var(--red);font-weight:700">${v.stuck}</span>` : v.stuck}</td>
+      <td>${pill(v.risk, rc)}</td>
+    </tr>`;
+  }).join("");
+}
+
+// 단계 역행
+function renderRegressions() {
+  $("regression-rows").innerHTML = STATE.regressions.map(r => `<tr>
+    <td>${maskIfInvestor(r.company)}</td>
+    <td>${r.from}</td>
+    <td style="color:var(--red)">${r.to}</td>
+    <td style="color:var(--muted)">${r.date}</td>
+    <td>${r.count > 1 ? `<span style="color:var(--red);font-weight:700">${r.count}</span>` : r.count}</td>
+  </tr>`).join("");
+}
+
+// 품질 KPI
+function renderQualityKPI() {
+  const total = 754;
+  const noEmail = 89;
+  const stagingPending = STATE.staging.filter(s => !STATE.stagingReviewed.has(s.id)).length;
+  const highQ = 312;
+  $("quality-kpi").innerHTML = [
+    ["전체 회사 수",         fmt(total),       "현재 추적 중"],
+    ["이메일 미확보",        fmt(noEmail),     `전체의 ${(noEmail/total*100).toFixed(1)}%`, "red"],
+    ["스테이징 검토 대기",   fmt(stagingPending), "낮은 신뢰도 이벤트", stagingPending > 2 ? "orange" : "green"],
+    ["high 품질 점수",      fmt(highQ),       "80점 이상", "green"]
+  ].map(([label, value, sub, color]) => `<div class="card kpi">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value" style="${color ? `color:var(--${color})` : ''}">${value}</div>
+    <div class="kpi-sub">${sub}</div>
+  </div>`).join("");
+  $("staging-count-badge").textContent = stagingPending + "건";
+}
+
+// 스테이징 이벤트
+function renderStaging() {
+  const pending = STATE.staging.filter(s => !STATE.stagingReviewed.has(s.id));
+  if (!pending.length) {
+    $("staging-list").innerHTML = '<div class="empty">✅ 검토 대기 이벤트 없음</div>';
+    return;
+  }
+  $("staging-list").innerHTML = pending.map(s => {
+    const isManual = s.type === "manual";
+    return `<div class="staging-item ${isManual ? "manual" : ""}" id="staging-${s.id}">
+      <div class="staging-title">
+        ${maskIfInvestor(s.company)}
+        ${pill(s.event_type, isManual ? "orange" : "blue")}
+        ${isManual ? pill("수동 검토 필수","red") : pill("자동 승인 가능","green")}
+      </div>
+      <div class="staging-meta">${s.reason}</div>
+      <div class="staging-actions">
+        ${isManual
+          ? `<button class="mini-btn approve" onclick="reviewStaging('${s.id}','approved')">승인</button>
+             <button class="mini-btn reject"  onclick="reviewStaging('${s.id}','rejected')">거부</button>`
+          : `<button class="mini-btn approve" onclick="reviewStaging('${s.id}','auto')">자동 승인</button>`}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function reviewStaging(id, decision) {
+  STATE.stagingReviewed.add(id);
+  toast(`${decision === "rejected" ? "거부" : "승인"} 처리되었습니다.`);
+  renderQualityKPI();
+  renderStaging();
+}
+
+// 필수 플래그
+function renderFlags() {
+  $("flags-list").innerHTML = STATE.flags.map(f => {
+    const rate = ((f.total - f.missing) / f.total * 100).toFixed(0);
+    const color = Number(rate) > 90 ? "green" : Number(rate) > 75 ? "orange" : "red";
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${f.label} <code style="font-size:11px;color:var(--muted)">${f.flag}</code></span>
+        <span style="font-weight:700;color:var(--${color})">${rate}% 확보</span>
+      </div>
+      <div class="bar"><div class="bar-fill bar-${color}" style="width:${rate}%"></div></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">${fmt(f.missing)}건 미확보 → 캠페인 자동 제외</div>
+    </div>`;
+  }).join("");
+}
+
+// 품질 분포
+function renderQualityChart() {
+  const total = STATE.qualityDist.reduce((a, d) => a + d.count, 0);
+  $("quality-chart").innerHTML = STATE.qualityDist.map(d => {
+    const pct_ = (d.count / total * 100).toFixed(0);
+    return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+      <div style="width:120px;font-size:13px;color:var(--muted)">${d.range}</div>
+      <div style="flex:1"><div class="bar"><div class="bar-fill" style="width:${pct_}%;background:${d.color}"></div></div></div>
+      <div style="width:80px;font-size:13px;font-weight:700;text-align:right">${fmt(d.count)}건 (${pct_}%)</div>
+    </div>`;
+  }).join("");
+}
+
+// SLA 카드
+function renderSLA() {
+  const now_ = new Date();
+  function nextFriday1630() {
+    const d = new Date();
+    const day = d.getDay();
+    const daysUntil = (5 - day + 7) % 7 || 7;
+    d.setDate(d.getDate() + daysUntil);
+    d.setHours(16, 30, 0, 0);
+    return d;
+  }
+  const nextReport = nextFriday1630();
+  const diffMs = nextReport - now_;
+  const diffH = Math.floor(diffMs / 3600000);
+  const diffM = Math.floor((diffMs % 3600000) / 60000);
+  const countdownStr = diffH < 1 ? `${diffM}분` : `${diffH}시간 ${diffM}분`;
+  const cdClass = diffH < 2 ? "crit" : diffH < 12 ? "warn" : "";
+
+  $("sla-cards").innerHTML = STATE.slaJobs.map(j => {
+    const st = STATE.slaOverride[j.id] || j.status;
+    const sc = st === "validated" ? "green" : st === "delayed" ? "orange" : st === "failed" ? "red" : "blue";
+    const icon = st === "validated" ? "✅" : st === "delayed" ? "⏳" : st === "failed" ? "❌" : st === "partial" ? "⚡" : "🕐";
+    const countdown = j.id === "weekly"
+      ? `<div class="sla-countdown ${cdClass}">다음: ${countdownStr}</div>` : "";
+    return `<div class="sla-card">
+      <div class="sla-icon">${icon}</div>
+      <div class="sla-info">
+        <div class="sla-name">${j.label} 보고서</div>
+        <div class="sla-period">${j.period}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">수집 ${j.cutoff} → 배포 ${j.publish}</div>
+      </div>
+      ${countdown}
+      <div>${statusPill(st)}</div>
+    </div>`;
+  }).join("");
+}
+
+// Slack 메시지
+function buildSlackMsg(status) {
+  const t = cohortTotals();
+  const job = STATE.slaJobs.find(j => j.id === "weekly");
+  const cfg = salesmapConfig();
+  const user = STATE.settings.slackUser || "@예충희";
+  const uid = STATE.settings.slackUserId;
+  const mention = uid ? `<@${uid}>` : user;
+  const msgs = {
+    validated:"정상 업데이트 완료", delayed:"데이터 업데이트 지연",
+    failed:"업데이트 실패 — 이전 데이터 유지", partial:"일부 항목 업데이트 중",
+    retrying:"자동 재처리 진행 중", escalated:"⚠ 에스컬레이션 발생"
+  };
+  return `[세일즈맵 코호트 대시보드 업데이트]
+수신: ${mention}
+보고서: ${job.label} (${job.period})
+상태: ${status} — ${msgs[status] || "상태 확인 필요"}
+업데이트 완료: ${now()}
+
+📊 핵심 지표
+유입: ${fmt(t.input)} / 리드: ${fmt(t.leads)} / 딜: ${fmt(t.deals)} / 결제: ${fmt(t.paid)}
+딜 전환율: ${pct(t.deals,t.input)} / 결제율: ${pct(t.paid,t.deals)}
+
+🔧 API 연동
+Worker: ${cfg.useWorker ? "✅ 사용" : "⚠ 미설정"} / Token: ${cfg.token ? "✅ 설정됨" : "❌ 미설정"}
+매핑 해시: ${cfg.mappingHash || "Phase 1 확인 중"}
+
+대시보드: ${location.href}`;
+}
+
+function renderSlack() {
+  const st = document.getElementById("select-status")?.value || "validated";
+  $("slack-preview").textContent = buildSlackMsg(st);
+}
+
+function renderNotifyHistory() {
+  const h = JSON.parse(localStorage.getItem("cohortHistory") || "[]");
+  if (!h.length) { $("notify-history").innerHTML = '<div class="empty">아직 통보 기록이 없습니다</div>'; return; }
+  $("notify-history").innerHTML = h.slice().reverse().slice(0, 20).map(item => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)">
+      <div>
+        <div style="font-weight:700;font-size:13px">${item.report}</div>
+        <div style="font-size:11px;color:var(--muted)">${item.at}</div>
+      </div>
+      ${statusPill(item.status)}
+    </div>`).join("");
+}
+
+// 이벤트 원장
+async function renderLedger() {
+  const filter = $("ledger-filter")?.value || "all";
+  const events = filter === "all" ? STATE.events : STATE.events.filter(e => e.status === filter);
+  const rows = [];
+  for (const e of events) {
+    const fp = await eventFingerprint({
+      amount: e.amount, entity_id: e.company, entity_type: e.entity_type,
+      event_at_utc: e.at, event_type: e.event_type,
+      from_stage_id: e.from_stage_id, to_stage_id: e.to_stage_id
+    });
+    rows.push(`<tr>
+      <td style="font-family:monospace;font-size:12px">${e.at}</td>
+      <td>${maskIfInvestor(e.company)}</td>
+      <td><code style="font-size:12px">${e.event_type}</code></td>
+      <td>${pill(e.entity_type,"gray")}</td>
+      <td style="text-align:right">${e.amount ? fmt(e.amount)+"원" : "–"}</td>
+      <td>${statusPill(e.status)}</td>
+      <td><code style="font-size:11px;color:var(--muted)">${fp}</code></td>
+    </tr>`);
+  }
+  $("ledger-rows").innerHTML = rows.join("");
+}
+
+// OCR 연동 설정
+function renderOcrConnections() {
+  const o = readOcrSettings();
+  const cfg = salesmapConfig();
+  const items = [
+    { label:"Worker URL",        value: cfg.workerUrl || "미설정",     ok: Boolean(cfg.workerUrl) },
+    { label:"SalesMap Token",    value: cfg.token ? maskText(cfg.token)+"(마스킹)" : "미설정", ok: Boolean(cfg.token) },
+    { label:"사업자번호 Key",      value: o.biznoKey ? "설정됨" : "미설정", ok: Boolean(o.biznoKey) },
+    { label:"NTS Key",           value: o.ntsKey ? "설정됨" : "미설정",   ok: Boolean(o.ntsKey)   },
+    { label:"Gemini/Vision Key", value: o.geminiKey ? "설정됨" : "미설정",ok: Boolean(o.geminiKey)},
+    { label:"매핑 버전 해시",      value: o.mappingHash || "Phase 1 확인 중", ok: Boolean(o.mappingHash) }
+  ];
+  $("ocr-connections").innerHTML = items.map(it => `
+    <div class="connection-row">
+      <div><div class="conn-label">${it.label}</div><div class="conn-value">${it.value}</div></div>
+      <span class="conn-status ${it.ok ? "conn-ok" : "conn-warn"}">${it.ok ? "✓ 설정됨" : "확인 필요"}</span>
+    </div>`).join("");
+
+  const ready = cfg.ready;
+  const badge = $("ocr-status-badge");
+  badge.textContent = ready ? "연동됨" : "설정 필요";
+  badge.className = `pill ${ready ? "pill-green" : "pill-orange"} pill-dot`;
+
+  // 사이드바 상태
+  const dot = $("sb-ocr-dot");
+  const lbl = $("sb-ocr-label");
+  dot.className = "sb-status-dot" + (ready ? "" : " warn");
+  lbl.textContent = ready ? "OCR Pro 연동됨" : "OCR 설정 필요";
+}
+
+// Phase 2 게이트
+function renderGate() {
+  $("gate-rows").innerHTML = STATE.gate.map(g => {
+    const catColor = g.cat === "Phase 1 신규" ? "purple" : "gray";
+    return `<tr>
+      <td style="font-size:12px;color:var(--muted)">${g.n}</td>
+      <td style="white-space:normal;font-size:13px">${g.desc}</td>
+      <td>${pill(g.cat, catColor)}</td>
+      <td>${g.done ? pill("✓ 확정","green") : pill("확인 중","orange")}</td>
+    </tr>`;
+  }).join("");
+}
+
+// 설정 렌더
+function renderSettingsView() {
+  renderOcrConnections();
+  renderGate();
+  const s = STATE.settings;
+  if (s.slackUser) $("inp-slack-user").value = s.slackUser;
+  if (s.slackUserId) $("inp-slack-id").value = s.slackUserId;
+}
+
+// RBAC 뱃지
+function renderRoleBadge() {
+  const labels = { admin:"👑 admin", operations:"⚙️ operations", investor:"📈 investor", read_only:"👁 read_only" };
+  const badge = $("role-badge");
+  badge.textContent = labels[STATE.role] || STATE.role;
+  badge.className = `role-badge role-${STATE.role}`;
+}
+
+// ══════════════════════════════════════════════
+//  전체 렌더
+// ══════════════════════════════════════════════
+function renderAll() {
+  renderRoleBadge();
+  renderKPI();
+  renderCohortTable();
+  renderFunnel();
+  renderFreshness();
+  renderCustomerType();
+  renderHeatmap();
+  renderCycles();
+  renderRetention();
+  renderVelocity();
+  renderRegressions();
+  renderQualityKPI();
+  renderStaging();
+  renderFlags();
+  renderQualityChart();
+  renderSLA();
+  renderSlack();
+  renderNotifyHistory();
+  renderLedger();
+  renderSettingsView();
+  $("topbar-asof").textContent = "기준: " + now();
+  $("sb-slack-user").textContent = STATE.settings.slackUser || "@예충희";
+}
+
+// ══════════════════════════════════════════════
+//  이벤트 바인딩
+// ══════════════════════════════════════════════
+
+// 네비게이션
+document.querySelectorAll(".nav-btn[data-view]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    $("view-" + btn.dataset.view).classList.add("active");
+  });
+});
+
+// 컨트롤
+$("ctrl-role").addEventListener("change", e => { STATE.role = e.target.value; renderAll(); });
+$("ctrl-period").addEventListener("change", e => { STATE.period = e.target.value; renderAll(); });
+$("ctrl-source").addEventListener("change", e => { STATE.source = e.target.value; renderAll(); });
+$("btn-refresh").addEventListener("click", () => { toast("데이터를 갱신합니다."); renderAll(); });
+
+// Slack
+$("btn-slack").addEventListener("click", () => {
+  document.querySelector('[data-view="sla"]').click();
+  renderSlack();
+});
+$("btn-copy-slack").addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("slack-preview").textContent);
+  toast("메시지가 복사되었습니다.");
+});
+$("btn-mark-sent").addEventListener("click", () => {
+  const h = JSON.parse(localStorage.getItem("cohortHistory") || "[]");
+  const st = $("select-status").value;
+  h.push({ report:"주간", status:st, at:now() });
+  localStorage.setItem("cohortHistory", JSON.stringify(h.slice(-30)));
+  toast("통보 이력에 기록되었습니다.");
+  renderNotifyHistory();
+});
+$("btn-clear-history").addEventListener("click", () => {
+  localStorage.removeItem("cohortHistory");
+  renderNotifyHistory();
+});
+document.getElementById("select-status").addEventListener("change", renderSlack);
+
+// SLA 시뮬레이션
+$("btn-sim-delay").addEventListener("click", () => {
+  STATE.slaOverride["weekly"] = "delayed";
+  renderSLA(); renderFreshness();
+  toast("주간 보고서 → 지연(delayed) 상태로 변경");
+});
+$("btn-sim-fail").addEventListener("click", () => {
+  STATE.slaOverride["weekly"] = "failed";
+  renderSLA(); renderFreshness();
+  toast("주간 보고서 → 실패(failed) 상태로 변경");
+});
+$("btn-reset-sla").addEventListener("click", () => {
+  STATE.slaOverride = {};
+  renderSLA(); renderFreshness();
+  toast("SLA 상태가 초기화되었습니다.");
+});
+
+// 이벤트 원장 필터
+$("ledger-filter").addEventListener("change", () => renderLedger());
+
+// OCR 설정
+$("btn-ocr-sync").addEventListener("click", () => {
+  renderOcrConnections();
+  toast("OCR Pro 설정값을 다시 읽었습니다.");
+});
+$("btn-save-settings").addEventListener("click", () => {
+  STATE.settings = {
+    slackUser:   $("inp-slack-user").value.trim() || "@예충희",
+    slackUserId: $("inp-slack-id").value.trim()
+  };
+  localStorage.setItem("cohortSettings", JSON.stringify(STATE.settings));
+  toast("설정이 저장되었습니다.");
+  renderAll();
+});
+
+// 1분마다 자동 갱신 (SLA 카운트다운)
+setInterval(() => { renderSLA(); $("topbar-asof").textContent = "기준: " + now(); }, 60000);
+
+// 초기 렌더
+renderAll();
+</script>
+</body>
+</html>
