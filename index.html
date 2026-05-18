@@ -305,6 +305,18 @@ tbody tr:hover td{background:#fafbff}
           <div class="card-body np tw"><table><thead><tr><th>회사</th><th>from</th><th>to</th><th>발생일</th><th>횟수</th></tr></thead><tbody id="regression-rows"></tbody></table></div>
         </div>
       </div>
+      <!-- 체류 시간 히트맵 -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <h3>단계별 체류 시간 트렌드</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pill pill-gray">P50 (시간) × 월별</span>
+            <button class="btn" id="btn-refresh-dwell-heatmap">API 새로고침</button>
+            <span id="dwell-heatmap-status" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+        </div>
+        <div class="card-body" id="dwell-heatmap-wrap" style="overflow-x:auto"></div>
+      </div>
     </div>
 
     <!-- ══════ 데이터 품질 ══════ -->
@@ -578,6 +590,18 @@ tbody tr:hover td{background:#fafbff}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "1.8.0",
+    date: "2026-05-18",
+    label: "체류 시간 히트맵 실데이터 연동 (Phase 1 #3)",
+    items: [
+      { type: "feat", text: "파이프라인 뷰에 '단계별 체류 시간 트렌드' 히트맵 카드 추가" },
+      { type: "feat", text: "fetchDwellHeatmap() — 딜 API에서 단계 진입일 기준 월별 P50 체류 시간 집계" },
+      { type: "feat", text: "색상: 임계값 대비 5단계 (녹→황→주황→적), 파이프라인 매핑 threshH 기준" },
+      { type: "feat", text: "API 미연동 시 목업 데이터 자동 표시 + 경고 안내" },
+      { type: "feat", text: "'API 새로고침' 버튼으로 실데이터 즉시 로드" }
+    ]
+  },
   {
     version: "1.7.0",
     date: "2026-05-18",
@@ -1693,6 +1717,7 @@ function renderAll() {
   renderCycles();
   renderRetention();
   renderVelocity();
+  renderDwellHeatmap();
   renderRegressions();
   renderQualityKPI();
   renderStaging();
@@ -1804,6 +1829,7 @@ $("btn-save-ocr-keys").addEventListener("click", () => {
   renderOcrConnections();
 });
 // 파이프라인 매핑 저장 / 초기화
+$("btn-refresh-dwell-heatmap").addEventListener("click", handleRefreshDwellHeatmap);
 $("btn-save-mapping").addEventListener("click", () => {
   const rows = collectMappingFromTable();
   savePipelineMapping(rows);
@@ -2065,6 +2091,130 @@ async function handleRefreshVelocity() {
   } catch(e) {
     if (status) status.textContent = "오류: " + e.message;
     toast("새로고침 실패: " + e.message, 3500);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "API 새로고침"; }
+  }
+}
+
+// ── 체류 시간 히트맵 ──
+// 스테이지 × 월별 P50 dwell 시간 계산
+async function fetchDwellHeatmap() {
+  const PIPELINE = "세일즈 파이프라인";
+  const mapping  = loadPipelineMapping();
+  const included = mapping.filter(m => m.pipe === "세일즈" && m.include);
+  const stageOrder = included.map(m => m.stage);
+
+  const deals = await salesmapGetAllDeals();
+  if (!deals.length) throw new Error("딜 데이터 없음");
+
+  // dwellMap[stage][YYYY-MM] = [sec, ...]
+  const dwellMap = {};
+  for (const deal of deals) {
+    const parsed = parseStageDwells(deal, PIPELINE);
+    for (const [stage, info] of Object.entries(parsed)) {
+      if (info.dwellSec == null || !info.enteredTs) continue;
+      const month = new Date(info.enteredTs).toISOString().slice(0, 7);
+      if (!dwellMap[stage]) dwellMap[stage] = {};
+      if (!dwellMap[stage][month]) dwellMap[stage][month] = [];
+      dwellMap[stage][month].push(info.dwellSec);
+    }
+  }
+
+  // 최근 6개월 목록
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    months.push(d.toISOString().slice(0, 7));
+  }
+
+  STATE.dwellHeatmap = { stageOrder, dwellMap, months };
+  renderDwellHeatmap();
+}
+
+function renderDwellHeatmap(useMock = false) {
+  const wrap = $("dwell-heatmap-wrap");
+  if (!wrap) return;
+
+  // 목업 데이터 (API 미연동 시)
+  const MOCK_STAGES = ["거래 준비","회원가입 완료","신청서 작성 중","심사 중","자료 보완 중","실사/협의 중","자금집행 완료","결제 완료"];
+  const MOCK_THRESH = { "거래 준비":48,"회원가입 완료":72,"신청서 작성 중":72,"심사 중":240,"자료 보완 중":72,"실사/협의 중":72,"자금집행 완료":0,"결제 완료":0 };
+  const MOCK_BASE   = { "거래 준비":12,"회원가입 완료":20,"신청서 작성 중":48,"심사 중":68,"자료 보완 중":55,"실사/협의 중":116,"자금집행 완료":480,"결제 완료":200 };
+
+  const months = STATE.dwellHeatmap?.months || (() => {
+    const m = []; for (let i=5;i>=0;i--) { const d=new Date(); d.setMonth(d.getMonth()-i); m.push(d.toISOString().slice(0,7)); } return m;
+  })();
+
+  const stageOrder = STATE.dwellHeatmap?.stageOrder || MOCK_STAGES;
+  const dwellMap   = STATE.dwellHeatmap?.dwellMap   || null;
+
+  // 임계값 조회 (매핑에서)
+  const mapping = loadPipelineMapping();
+  const threshMap = Object.fromEntries(mapping.map(m => [m.stage, m.threshH || 0]));
+
+  // 셀 배경색: 임계값 대비
+  function cellColor(p50h, thresh) {
+    if (!thresh) return ["#f1f5f9","#475569"];   // 성사/완료 단계
+    const ratio = p50h / thresh;
+    if (ratio >= 1.5) return ["#dc2626","#fff"];
+    if (ratio >= 1.0) return ["#f97316","#fff"];
+    if (ratio >= 0.7) return ["#facc15","#78350f"];
+    if (ratio >= 0.4) return ["#86efac","#166534"];
+    return ["#dcfce7","#166534"];
+  }
+
+  let html = `<table style="border-collapse:separate;border-spacing:3px"><thead><tr>
+    <th style="text-align:left;font-size:11px;color:var(--muted);padding:3px 8px;white-space:nowrap">단계</th>`;
+  months.forEach(m => { html += `<th style="font-size:11px;color:var(--muted);padding:3px 8px;white-space:nowrap">${m}</th>`; });
+  html += `</tr></thead><tbody>`;
+
+  for (const stage of stageOrder) {
+    html += `<tr><td style="font-size:12px;color:var(--text);padding:3px 8px;white-space:nowrap">${stage}</td>`;
+    const thresh = threshMap[stage] ?? MOCK_THRESH[stage] ?? 120;
+    for (const month of months) {
+      let p50h;
+      if (dwellMap?.[stage]?.[month]?.length) {
+        p50h = +(percentileOf(dwellMap[stage][month], 50) / 3600).toFixed(1);
+      } else {
+        // 목업: 기준값에 ±20% 노이즈
+        const base = MOCK_BASE[stage] ?? 48;
+        const seed = (stage.charCodeAt(0) + month.charCodeAt(5)) % 7;
+        p50h = +(base * (0.8 + seed * 0.06)).toFixed(1);
+      }
+      const [bg, tc] = cellColor(p50h, thresh);
+      const label = p50h >= 24 ? `${(p50h/24).toFixed(1)}d` : `${p50h}h`;
+      html += `<td><div class="heatmap-cell" style="width:64px;height:32px;background:${bg};color:${tc}"
+        title="${stage} ${month}: P50 ${p50h}h (임계 ${thresh}h)">${label}</div></td>`;
+    }
+    html += `</tr>`;
+  }
+
+  html += `</tbody></table>
+  <div style="margin-top:10px;display:flex;gap:12px;font-size:11px;color:var(--muted);flex-wrap:wrap;align-items:center">
+    <strong style="color:var(--text)">임계값 대비:</strong>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border-radius:2px;margin-right:3px"></span>~40%</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border-radius:2px;margin-right:3px"></span>40~70%</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#facc15;border-radius:2px;margin-right:3px"></span>70~100%</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:2px;margin-right:3px"></span>100~150%</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;margin-right:3px"></span>150%+</span>
+    ${!dwellMap ? `<span style="margin-left:8px;color:var(--orange)">⚠ 목업 데이터 — API 새로고침으로 실데이터 로드</span>` : ""}
+  </div>`;
+
+  wrap.innerHTML = html;
+}
+
+async function handleRefreshDwellHeatmap() {
+  const btn    = $("btn-refresh-dwell-heatmap");
+  const status = $("dwell-heatmap-status");
+  if (btn) { btn.disabled = true; btn.textContent = "로딩 중..."; }
+  if (status) status.textContent = "";
+  try {
+    await fetchDwellHeatmap();
+    const now_ = new Date().toLocaleTimeString("ko-KR");
+    if (status) status.textContent = `${now_} 기준`;
+    toast("체류 시간 히트맵 업데이트 완료");
+  } catch(e) {
+    if (status) status.textContent = "오류: " + e.message;
+    toast("히트맵 로드 실패: " + e.message, 3500);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "API 새로고침"; }
   }
