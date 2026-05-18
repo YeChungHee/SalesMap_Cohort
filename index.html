@@ -248,8 +248,11 @@ tbody tr:hover td{background:#fafbff}
           <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>결제 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>전환 깔때기</h3></div>
-          <div class="card-body" id="funnel-wrap"></div>
+          <div class="card-header">
+            <h3>딜 퍼널</h3>
+            <span class="pill pill-gray" id="funnel-period">통계 기간 6개월</span>
+          </div>
+          <div class="card-body" id="funnel-wrap" style="padding:16px 12px"></div>
         </div>
       </div>
       <div class="g g2" style="margin-top:16px">
@@ -575,6 +578,17 @@ tbody tr:hover td{background:#fafbff}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "1.7.0",
+    date: "2026-05-18",
+    label: "딜 퍼널 SalesMap 스타일 재설계",
+    items: [
+      { type: "feat", text: "전환 깔때기 → 딜 퍼널 — 트라페조이드 밴드 + 단계 전환율 배지 (SalesMap 참고)" },
+      { type: "feat", text: "라이트 인디고→다크 인디고 색상 보간, 8단계 세일즈 파이프라인 전체 표시" },
+      { type: "feat", text: "누적 % (전체 대비) + 단계간 전환율(%) 배지 동시 표시" },
+      { type: "fix",  text: "좁은 바에서 텍스트 잘림 문제 해결" }
+    ]
+  },
   {
     version: "1.6.0",
     date: "2026-05-18",
@@ -1100,26 +1114,64 @@ function renderCohortTable() {
 
 // 깔때기
 function renderFunnel() {
-  const t = cohortTotals();
-  const steps = [
-    { label:"유입",  value:t.input, color:"#2563eb" },
-    { label:"리드",  value:t.leads, color:"#7c3aed" },
-    { label:"딜",    value:t.deals, color:"#16a34a" },
-    { label:"결제",  value:t.paid,  color:"#d97706" }
+  // 세일즈 파이프라인 단계별 딜 수 (SalesMap 기준 목업)
+  const FUNNEL_STAGES = [
+    { stage:"거래 준비",      count: STATE.funnelData?.[0] ?? 70 },
+    { stage:"회원가입 완료",  count: STATE.funnelData?.[1] ?? 69 },
+    { stage:"신청서 작성 중", count: STATE.funnelData?.[2] ?? 67 },
+    { stage:"심사 중",        count: STATE.funnelData?.[3] ?? 67 },
+    { stage:"자료 보완 중",   count: STATE.funnelData?.[4] ?? 65 },
+    { stage:"실사/협의 중",   count: STATE.funnelData?.[5] ?? 64 },
+    { stage:"자금집행 완료",  count: STATE.funnelData?.[6] ?? 63 },
+    { stage:"결제 완료",      count: STATE.funnelData?.[7] ?? 44 }
   ];
-  const max = steps[0].value || 1;
-  $("funnel-wrap").innerHTML = `<div class="funnel-wrap">${steps.map((s,i) => {
-    const w = Math.max((s.value / max) * 100, 4);
-    const rate = i > 0 ? ` (${pct(s.value, steps[i-1].value)})` : "";
-    return `<div class="funnel-row">
-      <span class="funnel-label">${s.label}</span>
-      <div style="flex:1;position:relative">
-        <div style="height:32px;border-radius:4px;background:${s.color};width:${w}%;min-width:40px;display:flex;align-items:center;padding-left:10px;font-size:13px;font-weight:700;color:#fff;transition:width .4s">
-          ${fmt(s.value)}${rate}
+  const top = FUNNEL_STAGES[0].count || 1;
+  const n   = FUNNEL_STAGES.length;
+
+  // 라이트 인디고 → 다크 인디고 색상 보간
+  function lerpColor(t) {
+    const r = Math.round(0xc7 + (0x31 - 0xc7) * t);
+    const g = Math.round(0xd2 + (0x27 - 0xd2) * t);
+    const b = Math.round(0xfe + (0x74 - 0xfe) * t);
+    return `rgb(${r},${g},${b})`;
+  }
+
+  const rows = FUNNEL_STAGES.map((s, i) => {
+    const cumPct  = (s.count / top * 100).toFixed(1);
+    const stepPct = i > 0 ? (s.count / FUNNEL_STAGES[i-1].count * 100).toFixed(1) : null;
+    const wi      = s.count / top * 100;
+    const wNext   = i < n-1 ? FUNNEL_STAGES[i+1].count / top * 100 : wi;
+    const cTop    = (100 - wi)    / 2;
+    const cBot    = (100 - wNext) / 2;
+    const color   = lerpColor(i / (n - 1));
+    const textColor = i >= 5 ? "#fff" : "#312e81";
+
+    const badge = stepPct
+      ? `<div style="position:absolute;left:50%;top:-11px;transform:translateX(-50%);
+           background:#fff;border:1.5px solid #e0e7ff;border-radius:20px;
+           padding:1px 10px;font-size:11px;font-weight:700;color:#3730a3;
+           white-space:nowrap;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.07)">${stepPct}%</div>`
+      : "";
+
+    return `<div style="display:flex;align-items:stretch;height:42px;position:relative">
+      <div style="width:150px;flex-shrink:0;display:flex;flex-direction:column;
+           justify-content:center;padding-right:14px;text-align:right;gap:1px">
+        <span style="font-size:11px;color:var(--muted);line-height:1.3">${s.stage}</span>
+        <span style="font-size:12px;line-height:1.4">
+          <span style="color:var(--muted);margin-right:4px">${fmt(s.count)}</span>
+          <strong style="color:var(--text)">${cumPct}%</strong>
+        </span>
+      </div>
+      <div style="flex:1;position:relative;overflow:visible">
+        ${badge}
+        <div style="width:100%;height:100%;background:${color};
+          clip-path:polygon(${cTop}% 0%,${100-cTop}% 0%,${100-cBot}% 100%,${cBot}% 100%)">
         </div>
       </div>
     </div>`;
-  }).join("")}</div>`;
+  });
+
+  $("funnel-wrap").innerHTML = rows.join("");
 }
 
 // 신선도
