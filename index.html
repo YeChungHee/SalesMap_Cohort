@@ -591,6 +591,17 @@ tbody tr:hover td{background:#fafbff}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "1.9.0",
+    date: "2026-05-18",
+    label: "전체 목업 데이터 활성화",
+    items: [
+      { type: "feat", text: "파이프라인 KPI 카드 6개 추가 — 총 진행 딜·성사·이탈·리드→딜 전환율·SQL·영업 사이클" },
+      { type: "fix",  text: "velocity 목업 — 세일즈/리드 파이프라인 실제 단계명으로 전면 교체 (16개 단계)" },
+      { type: "fix",  text: "regressions 목업 — 실제 단계명으로 교체 (심사중↔신청서, 실사↔심사 등)" },
+      { type: "fix",  text: "체류 시간 히트맵 경고 메시지 스타일 완화 (일반 안내 텍스트로 변경)" }
+    ]
+  },
+  {
     version: "1.8.0",
     date: "2026-05-18",
     label: "체류 시간 히트맵 실데이터 연동 (Phase 1 #3)",
@@ -963,19 +974,31 @@ const STATE = {
   ],
 
   velocity: [
-    { pipe:"유입",  stage:"추출 대기",       p50:1.2, p75:2.4, p90:4.1, stuck:3,  risk:"low"    },
-    { pipe:"유입",  stage:"SalesMap 등록",   p50:2.0, p75:3.8, p90:6.5, stuck:5,  risk:"medium" },
-    { pipe:"리드",  stage:"초기 접촉",        p50:20,  p75:36,  p90:58,  stuck:12, risk:"medium" },
-    { pipe:"리드",  stage:"유효화",           p50:35,  p75:58,  p90:91,  stuck:9,  risk:"medium" },
-    { pipe:"리드",  stage:"딜 전환 검토",     p50:48,  p75:80,  p90:124, stuck:6,  risk:"high"   },
-    { pipe:"딜",   stage:"제안",             p50:56,  p75:92,  p90:148, stuck:7,  risk:"medium" },
-    { pipe:"딜",   stage:"계약/결제",        p50:88,  p75:141, p90:220, stuck:4,  risk:"high"   }
+    // 리드 파이프라인
+    { pipe:"리드", stage:"IN 리드",         p50:18,   p75:32,   p90:58,   stuck:8,  risk:"medium" },
+    { pipe:"리드", stage:"OUT 리드",        p50:22,   p75:39,   p90:64,   stuck:6,  risk:"medium" },
+    { pipe:"리드", stage:"네트워크 리드",   p50:15,   p75:27,   p90:44,   stuck:4,  risk:"low"    },
+    { pipe:"리드", stage:"콜드메일 발송중", p50:96,   p75:148,  p90:210,  stuck:11, risk:"high"   },
+    { pipe:"리드", stage:"AI 분석완료",     p50:8,    p75:14,   p90:24,   stuck:3,  risk:"low"    },
+    { pipe:"리드", stage:"접촉 진행중",     p50:72,   p75:118,  p90:192,  stuck:14, risk:"high"   },
+    { pipe:"리드", stage:"1차상담 완료",    p50:48,   p75:84,   p90:136,  stuck:7,  risk:"medium" },
+    { pipe:"리드", stage:"이메일 안내완료", p50:36,   p75:61,   p90:98,   stuck:5,  risk:"medium" },
+    // 세일즈 파이프라인
+    { pipe:"세일즈", stage:"거래 준비",      p50:12,   p75:28,   p90:44,   stuck:4,  risk:"low"    },
+    { pipe:"세일즈", stage:"회원가입 완료",  p50:18,   p75:36,   p90:58,   stuck:3,  risk:"low"    },
+    { pipe:"세일즈", stage:"신청서 작성 중", p50:44,   p75:68,   p90:96,   stuck:6,  risk:"medium" },
+    { pipe:"세일즈", stage:"심사 중",        p50:68,   p75:124,  p90:198,  stuck:9,  risk:"medium" },
+    { pipe:"세일즈", stage:"자료 보완 중",   p50:52,   p75:88,   p90:138,  stuck:7,  risk:"medium" },
+    { pipe:"세일즈", stage:"실사/협의 중",   p50:116,  p75:194,  p90:298,  stuck:11, risk:"high"   },
+    { pipe:"세일즈", stage:"자금집행 완료",  p50:480,  p75:720,  p90:1080, stuck:5,  risk:"medium" },
+    { pipe:"세일즈", stage:"결제 완료",      p50:200,  p75:340,  p90:520,  stuck:2,  risk:"low"    }
   ],
 
   regressions: [
-    { company:"(주)슈니테크",   from:"계약/결제", to:"제안",       date:"2026-05-14", count:1 },
-    { company:"큐엠큐주식회사", from:"유효화",    to:"초기 접촉",  date:"2026-05-09", count:2 },
-    { company:"제로코퍼레이션", from:"제안",      to:"유효화",     date:"2026-05-03", count:1 }
+    { company:"(주)슈니테크",   from:"심사 중",       to:"신청서 작성 중", date:"2026-05-14", count:1 },
+    { company:"큐엠큐주식회사", from:"실사/협의 중",  to:"심사 중",        date:"2026-05-09", count:2 },
+    { company:"제로코퍼레이션", from:"자료 보완 중",  to:"심사 중",        date:"2026-05-03", count:1 },
+    { company:"테크솔루션",     from:"접촉 진행중",   to:"IN 리드",        date:"2026-05-01", count:1 }
   ],
 
   staging: [
@@ -1307,6 +1330,34 @@ function renderRetention() {
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">재구매(리텐션 + 재활성화) 건수</div>
     ${svgBar(data, 340, 100, "#7c3aed")}
     <div style="margin-top:8px;font-size:12px;color:var(--muted)">최근 6개월 추이 — 5월 일부 기간 포함</div>`;
+}
+
+// 파이프라인 KPI 카드
+function renderPipelineCards() {
+  const el = $("pipeline-cards");
+  if (!el) return;
+  // 딜 퍼널 기준 목업 (SalesMap 실데이터 스크린샷)
+  const totalDeals    = 70;   // 거래 준비 기준
+  const wonDeals      = 44;   // 결제 완료 누적
+  const lostDeals     = 9;    // 결제지연2+진행거절4+신청취소2+보류1
+  const activeDeals   = totalDeals - wonDeals - lostDeals;
+  const winRate       = (wonDeals / totalDeals * 100).toFixed(1);
+  const totalLeads    = 1084; // SalesMap 단계별 퍼널 기준
+  const leadToSales   = (totalDeals / totalLeads * 100).toFixed(1);
+  const cards = [
+    { label:"총 진행 딜",     value: fmt(activeDeals),          sub:`전체 ${fmt(totalDeals)}건 중`,      color:"blue"   },
+    { label:"누적 성사",      value: fmt(wonDeals),             sub:`성사율 ${winRate}%`,               color:"green"  },
+    { label:"누적 이탈",      value: fmt(lostDeals),            sub:"결제지연·거절·취소·보류",           color:"red"    },
+    { label:"리드→딜 전환",   value: `${leadToSales}%`,         sub:`리드 ${fmt(totalLeads)}건 대비`,    color:"orange" },
+    { label:"리드 파이프라인", value: fmt(29),                   sub:"영업대상 확정 (SQL)",              color:"purple" },
+    { label:"평균 영업 사이클",value: "48일",                    sub:"리드 진입→결제 완료 P50",          color:"gray"   }
+  ];
+  el.innerHTML = cards.map(c => `
+    <div class="card kpi">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value" style="color:var(--${c.color})">${c.value}</div>
+      <div class="kpi-sub">${c.sub}</div>
+    </div>`).join("");
 }
 
 // 스테이지 체류
@@ -1716,6 +1767,7 @@ function renderAll() {
   renderHeatmap();
   renderCycles();
   renderRetention();
+  renderPipelineCards();
   renderVelocity();
   renderDwellHeatmap();
   renderRegressions();
@@ -2196,7 +2248,7 @@ function renderDwellHeatmap(useMock = false) {
     <span><span style="display:inline-block;width:10px;height:10px;background:#facc15;border-radius:2px;margin-right:3px"></span>70~100%</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:2px;margin-right:3px"></span>100~150%</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;margin-right:3px"></span>150%+</span>
-    ${!dwellMap ? `<span style="margin-left:8px;color:var(--orange)">⚠ 목업 데이터 — API 새로고침으로 실데이터 로드</span>` : ""}
+    ${!dwellMap ? `<span style="margin-left:8px;color:var(--muted);font-style:italic">목업 데이터 표시 중 — API 새로고침으로 실데이터 로드</span>` : ""}
   </div>`;
 
   wrap.innerHTML = html;
