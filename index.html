@@ -232,7 +232,6 @@ tbody tr:hover td{background:#fafbff}
       </select>
       <button class="btn" id="btn-refresh">↺ 갱신</button>
       <button class="btn primary" id="btn-slack">Slack 통보</button>
-      <button class="role-badge role-operations" id="role-badge" title="연동 설정으로 이동" style="cursor:pointer;border:1px solid">operations</button>
     </div>
   </div>
 
@@ -1747,12 +1746,7 @@ function renderSettingsView() {
 }
 
 // RBAC 뱃지
-function renderRoleBadge() {
-  const labels = { admin:"👑 admin", operations:"⚙️ operations", investor:"📈 investor", read_only:"👁 read_only" };
-  const badge = $("role-badge");
-  badge.textContent = labels[STATE.role] || STATE.role;
-  badge.className = `role-badge role-${STATE.role}`;
-}
+function renderRoleBadge() {}
 
 // ══════════════════════════════════════════════
 //  전체 렌더
@@ -1810,9 +1804,6 @@ $("ctrl-role").addEventListener("change", e => { STATE.role = e.target.value; re
 $("ctrl-period").addEventListener("change", e => { STATE.period = e.target.value; renderAll(); });
 $("ctrl-source").addEventListener("change", e => { STATE.source = e.target.value; renderAll(); });
 $("btn-refresh").addEventListener("click", () => { toast("데이터를 갱신합니다."); renderAll(); });
-$("role-badge").addEventListener("click", () => {
-  document.querySelector('[data-view="settings"]').click();
-});
 
 // Slack
 $("btn-slack").addEventListener("click", () => {
