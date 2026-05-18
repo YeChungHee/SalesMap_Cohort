@@ -533,6 +533,7 @@ tbody tr:hover td{background:#fafbff}
           <table id="mapping-table">
             <thead>
               <tr>
+                <th style="width:70px">파이프라인</th>
                 <th>단계명 (API)</th>
                 <th>표시명</th>
                 <th>구분</th>
@@ -574,6 +575,18 @@ tbody tr:hover td{background:#fafbff}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "1.6.0",
+    date: "2026-05-18",
+    label: "실제 파이프라인·필드 구성 반영",
+    items: [
+      { type: "feat", text: "세일즈 파이프라인 12단계 — 정체 기준일 기반 threshH 정확화 (진행/성사/실패)" },
+      { type: "feat", text: "리드 파이프라인 10단계 신규 추가 (IN리드~영업대상확정/보류)" },
+      { type: "feat", text: "매핑 테이블에 파이프라인 구분 컬럼 추가" },
+      { type: "feat", text: "COHORT_EXPECTED_ORG_FIELDS 회사 필드 전체 반영 (FlowScore·매출·요청액 등)" },
+      { type: "fix",  text: "CAT_OPTIONS SalesMap 실제 구분명으로 교체 (진행/성사/실패/종료)" }
+    ]
+  },
   {
     version: "1.5.0",
     date: "2026-05-18",
@@ -770,17 +783,20 @@ function salesmapConfig() {
 // ══════════════════════════════════════════════
 // OCR Pro v9.58 buildSalesMapPayload 기준 17개 커스텀 필드
 const COHORT_EXPECTED_ORG_FIELDS = [
-  "대표자명","담당직원","담당직함","사업자번호",
-  "전화","주소","웹 주소",
-  "기업형태","회원여부","매출(억)","설립일자","부스번호",
-  "아이템","FlowScore","영업이익","유입경로","유입경로_상세"
+  // 회사 정보 (확인됨)
+  "이름","사업자번호","대표자명","담당직원","담당직함","담당자",
+  "전화","주소","웹 주소","설립일자","기업형태","업종","산업분류",
+  "직원수","회원여부","구분","은행명","계좌번호",
+  "매출(억)","영업이익(억)","요청액","한도부과액(억원)","보증보험액(억원)",
+  "아이템","아이템_상세","FlowScore",
+  "대표 이메일(계산서)","메모"
 ];
-// 없으면 코호트 진입 필터 불가 → 커버리지 감소 (오염 아님)
-const COHORT_FILTER_FIELDS  = ["사업자번호"];
-// 없으면 소스 세그멘테이션 불가 (코호트 구조 자체는 유지)
-const COHORT_WARN_FIELDS    = ["유입경로","유입경로_상세"];
-// 네이티브 phone/address/website로 부분 보완 가능
-const COHORT_FALLBACK_FIELDS = ["전화","주소","웹 주소"];
+// 없으면 코호트 진입 필터 불가
+const COHORT_FILTER_FIELDS   = ["사업자번호","이름"];
+// 없으면 소스 세그멘테이션 불가
+const COHORT_WARN_FIELDS     = ["업종","산업분류","기업형태","FlowScore"];
+// 네이티브 필드로 부분 보완 가능
+const COHORT_FALLBACK_FIELDS = ["전화","주소","웹 주소","매출(억)","요청액"];
 
 // ── SalesMap GET 헬퍼 (OCR Pro salesmapFetch 워커 패턴 동일) ──
 async function salesmapGet(path) {
@@ -1856,22 +1872,35 @@ async function salesmapGetAllDeals(maxPages = 10) {
 }
 
 // ── 파이프라인 매핑 ──
+// 세일즈 파이프라인 — 정체 기준일 × 24 = threshH
 const PIPELINE_STAGE_DEFAULTS = [
-  { stage:"거래 준비",      label:"거래 준비",      cat:"영업준비", threshH:48,  include:true  },
-  { stage:"회원가입 완료",  label:"회원가입 완료",  cat:"영업준비", threshH:24,  include:true  },
-  { stage:"신청서 작성 중", label:"신청서 작성 중", cat:"심사",     threshH:72,  include:true  },
-  { stage:"심사 중",        label:"심사 중",        cat:"심사",     threshH:120, include:true  },
-  { stage:"자료 보완 중",   label:"자료 보완 중",   cat:"심사",     threshH:168, include:true  },
-  { stage:"실사/협의 중",   label:"실사/협의 중",   cat:"협의",     threshH:240, include:true  },
-  { stage:"자금집행 완료",  label:"자금집행 완료",  cat:"완료",     threshH:720, include:true  },
-  { stage:"결제 완료",      label:"결제 완료",      cat:"완료",     threshH:168, include:true  },
-  { stage:"결제 지연",      label:"결제 지연",      cat:"이탈",     threshH:0,   include:false },
-  { stage:"신청 취소",      label:"신청 취소",      cat:"이탈",     threshH:0,   include:false },
-  { stage:"진행 거절",      label:"진행 거절",      cat:"이탈",     threshH:0,   include:false },
-  { stage:"보류 서류/계약", label:"보류 서류/계약", cat:"이탈",     threshH:0,   include:false }
+  // ── 세일즈 파이프라인 (딜) ──
+  { pipe:"세일즈", stage:"거래 준비",      label:"거래 준비",      cat:"진행", threshH:48,  include:true  },
+  { pipe:"세일즈", stage:"회원가입 완료",  label:"회원가입 완료",  cat:"진행", threshH:72,  include:true  },
+  { pipe:"세일즈", stage:"신청서 작성 중", label:"신청서 작성 중", cat:"진행", threshH:72,  include:true  },
+  { pipe:"세일즈", stage:"심사 중",        label:"심사 중",        cat:"진행", threshH:240, include:true  },
+  { pipe:"세일즈", stage:"자료 보완 중",   label:"자료 보완 중",   cat:"진행", threshH:72,  include:true  },
+  { pipe:"세일즈", stage:"실사/협의 중",   label:"실사/협의 중",   cat:"진행", threshH:72,  include:true  },
+  { pipe:"세일즈", stage:"자금집행 완료",  label:"자금집행 완료",  cat:"성사", threshH:0,   include:true  },
+  { pipe:"세일즈", stage:"결제 완료",      label:"결제 완료",      cat:"성사", threshH:0,   include:true  },
+  { pipe:"세일즈", stage:"결제 지연",      label:"결제 지연",      cat:"실패", threshH:0,   include:false },
+  { pipe:"세일즈", stage:"진행 거절",      label:"진행 거절",      cat:"실패", threshH:0,   include:false },
+  { pipe:"세일즈", stage:"신청 취소",      label:"신청 취소",      cat:"실패", threshH:0,   include:false },
+  { pipe:"세일즈", stage:"보류 서류/계약", label:"보류 서류/계약", cat:"실패", threshH:0,   include:false },
+  // ── 리드 파이프라인 ──
+  { pipe:"리드", stage:"IN 리드",        label:"IN 리드",        cat:"진행", threshH:72,  include:true  },
+  { pipe:"리드", stage:"OUT 리드",       label:"OUT 리드",       cat:"진행", threshH:72,  include:true  },
+  { pipe:"리드", stage:"네트워크 리드",  label:"네트워크 리드",  cat:"진행", threshH:72,  include:true  },
+  { pipe:"리드", stage:"콜드메일 발송중",label:"콜드메일 발송중",cat:"진행", threshH:168, include:true  },
+  { pipe:"리드", stage:"AI 분석완료",    label:"AI 분석완료",    cat:"진행", threshH:48,  include:true  },
+  { pipe:"리드", stage:"접촉 진행중",    label:"접촉 진행중",    cat:"진행", threshH:168, include:true  },
+  { pipe:"리드", stage:"1차상담 완료",   label:"1차상담 완료",   cat:"진행", threshH:120, include:true  },
+  { pipe:"리드", stage:"이메일 안내완료",label:"이메일 안내완료",cat:"진행", threshH:120, include:true  },
+  { pipe:"리드", stage:"영업 대상 확정", label:"영업 대상 확정", cat:"종료", threshH:0,   include:true  },
+  { pipe:"리드", stage:"영업 대상 보류", label:"영업 대상 보류", cat:"종료", threshH:0,   include:false }
 ];
-const CAT_OPTIONS = ["영업준비","심사","협의","완료","이탈"];
-const CAT_COLOR   = { 영업준비:"gray", 심사:"blue", 협의:"orange", 완료:"green", 이탈:"red" };
+const CAT_OPTIONS = ["진행","성사","실패","종료"];
+const CAT_COLOR   = { 진행:"blue", 성사:"green", 실패:"red", 종료:"gray" };
 
 function loadPipelineMapping() {
   try {
@@ -1896,7 +1925,9 @@ function renderPipelineMapping() {
     const catOpts = CAT_OPTIONS.map(c =>
       `<option value="${c}" ${r.cat === c ? "selected" : ""}>${c}</option>`).join("");
     const rowBg = r.include ? "" : "background:#fafafa;opacity:.7";
+    const pipeColor = r.pipe === "리드" ? "orange" : "blue";
     return `<tr style="${rowBg}">
+      <td>${pill(r.pipe || "세일즈", pipeColor)}</td>
       <td style="font-size:12px;color:var(--muted)">${r.stage}</td>
       <td><input data-idx="${i}" data-field="label" type="text" value="${r.label}"
         style="border:1px solid var(--line);border-radius:5px;padding:3px 7px;font-size:12px;width:130px"></td>
