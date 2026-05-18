@@ -518,6 +518,33 @@ tbody tr:hover td{background:#fafbff}
         </div>
       </div>
 
+      <!-- 파이프라인 매핑 설정 -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <h3>파이프라인 단계 매핑</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span class="pill pill-blue">세일즈 파이프라인</span>
+            <button class="btn primary" id="btn-save-mapping">저장</button>
+            <button class="btn" id="btn-reset-mapping">기본값</button>
+            <span id="mapping-save-msg" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+        </div>
+        <div class="card-body np tw">
+          <table id="mapping-table">
+            <thead>
+              <tr>
+                <th>단계명 (API)</th>
+                <th>표시명</th>
+                <th>구분</th>
+                <th style="width:90px">위험 임계값(h)</th>
+                <th style="width:60px">포함</th>
+              </tr>
+            </thead>
+            <tbody id="mapping-rows"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="card" style="margin-top:16px">
         <div class="card-header"><h3>Phase 2 착수 게이트 현황</h3><span class="pill pill-orange">29개 항목</span></div>
         <div class="card-body np tw">
@@ -547,6 +574,17 @@ tbody tr:hover td{background:#fafbff}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "1.5.0",
+    date: "2026-05-18",
+    label: "파이프라인 매핑 설정 UI (Phase 1 #2)",
+    items: [
+      { type: "feat", text: "연동 설정에 파이프라인 단계 매핑 테이블 추가 — 표시명·구분·위험 임계값(h)·포함 여부 편집" },
+      { type: "feat", text: "매핑 12개 단계 기본값 내장 (영업준비·심사·협의·완료·이탈 5개 구분)" },
+      { type: "feat", text: "저장/기본값 버튼 — localStorage 'pipeline_stage_mapping' 키로 영속" },
+      { type: "feat", text: "fetchPipelineVelocity()가 매핑 적용 — 표시명·구분·임계값 기반 stuck·risk 계산" }
+    ]
+  },
   {
     version: "1.4.0",
     date: "2026-05-18",
@@ -1597,6 +1635,7 @@ function renderAll() {
   renderNotifyHistory();
   renderLedger();
   renderSettingsView();
+  renderPipelineMapping();
   renderUpdates();
   $("topbar-asof").textContent = "기준: " + now();
   $("sb-slack-user").textContent = STATE.settings.slackUser || "@예충희";
@@ -1695,6 +1734,20 @@ $("btn-save-ocr-keys").addEventListener("click", () => {
   setTimeout(() => { if (msg) msg.textContent = ""; }, 3000);
   toast(`${saved}개 키가 저장되었습니다.`);
   renderOcrConnections();
+});
+// 파이프라인 매핑 저장 / 초기화
+$("btn-save-mapping").addEventListener("click", () => {
+  const rows = collectMappingFromTable();
+  savePipelineMapping(rows);
+  const msg = $("mapping-save-msg");
+  if (msg) { msg.textContent = "저장 완료"; setTimeout(() => { msg.textContent = ""; }, 2000); }
+  toast("파이프라인 매핑이 저장되었습니다.");
+  renderPipelineMapping();
+});
+$("btn-reset-mapping").addEventListener("click", () => {
+  localStorage.removeItem("pipeline_stage_mapping");
+  toast("기본값으로 초기화되었습니다.");
+  renderPipelineMapping();
 });
 $("btn-save-settings").addEventListener("click", () => {
   STATE.settings = {
@@ -1802,6 +1855,75 @@ async function salesmapGetAllDeals(maxPages = 10) {
   return deals;
 }
 
+// ── 파이프라인 매핑 ──
+const PIPELINE_STAGE_DEFAULTS = [
+  { stage:"거래 준비",      label:"거래 준비",      cat:"영업준비", threshH:48,  include:true  },
+  { stage:"회원가입 완료",  label:"회원가입 완료",  cat:"영업준비", threshH:24,  include:true  },
+  { stage:"신청서 작성 중", label:"신청서 작성 중", cat:"심사",     threshH:72,  include:true  },
+  { stage:"심사 중",        label:"심사 중",        cat:"심사",     threshH:120, include:true  },
+  { stage:"자료 보완 중",   label:"자료 보완 중",   cat:"심사",     threshH:168, include:true  },
+  { stage:"실사/협의 중",   label:"실사/협의 중",   cat:"협의",     threshH:240, include:true  },
+  { stage:"자금집행 완료",  label:"자금집행 완료",  cat:"완료",     threshH:720, include:true  },
+  { stage:"결제 완료",      label:"결제 완료",      cat:"완료",     threshH:168, include:true  },
+  { stage:"결제 지연",      label:"결제 지연",      cat:"이탈",     threshH:0,   include:false },
+  { stage:"신청 취소",      label:"신청 취소",      cat:"이탈",     threshH:0,   include:false },
+  { stage:"진행 거절",      label:"진행 거절",      cat:"이탈",     threshH:0,   include:false },
+  { stage:"보류 서류/계약", label:"보류 서류/계약", cat:"이탈",     threshH:0,   include:false }
+];
+const CAT_OPTIONS = ["영업준비","심사","협의","완료","이탈"];
+const CAT_COLOR   = { 영업준비:"gray", 심사:"blue", 협의:"orange", 완료:"green", 이탈:"red" };
+
+function loadPipelineMapping() {
+  try {
+    const raw = localStorage.getItem("pipeline_stage_mapping");
+    if (!raw) return PIPELINE_STAGE_DEFAULTS.map(d => ({ ...d }));
+    const saved = JSON.parse(raw);
+    // 저장된 항목 기준으로 기본값과 병합 (신규 단계 자동 추가)
+    const savedMap = Object.fromEntries(saved.map(s => [s.stage, s]));
+    return PIPELINE_STAGE_DEFAULTS.map(d => savedMap[d.stage] ? { ...d, ...savedMap[d.stage] } : { ...d });
+  } catch { return PIPELINE_STAGE_DEFAULTS.map(d => ({ ...d })); }
+}
+
+function savePipelineMapping(rows) {
+  localStorage.setItem("pipeline_stage_mapping", JSON.stringify(rows));
+}
+
+function renderPipelineMapping() {
+  const rows = loadPipelineMapping();
+  const tbody = $("mapping-rows");
+  if (!tbody) return;
+  tbody.innerHTML = rows.map((r, i) => {
+    const catOpts = CAT_OPTIONS.map(c =>
+      `<option value="${c}" ${r.cat === c ? "selected" : ""}>${c}</option>`).join("");
+    const rowBg = r.include ? "" : "background:#fafafa;opacity:.7";
+    return `<tr style="${rowBg}">
+      <td style="font-size:12px;color:var(--muted)">${r.stage}</td>
+      <td><input data-idx="${i}" data-field="label" type="text" value="${r.label}"
+        style="border:1px solid var(--line);border-radius:5px;padding:3px 7px;font-size:12px;width:130px"></td>
+      <td><select data-idx="${i}" data-field="cat"
+        style="border:1px solid var(--line);border-radius:5px;padding:3px 6px;font-size:12px">
+        ${catOpts}</select></td>
+      <td><input data-idx="${i}" data-field="threshH" type="number" min="0" value="${r.threshH}"
+        style="border:1px solid var(--line);border-radius:5px;padding:3px 7px;font-size:12px;width:70px"></td>
+      <td style="text-align:center"><input data-idx="${i}" data-field="include" type="checkbox"
+        ${r.include ? "checked" : ""} style="width:16px;height:16px;cursor:pointer"></td>
+    </tr>`;
+  }).join("");
+}
+
+function collectMappingFromTable() {
+  const rows = loadPipelineMapping();
+  $("mapping-rows").querySelectorAll("input,select").forEach(el => {
+    const idx   = Number(el.dataset.idx);
+    const field = el.dataset.field;
+    if (!field) return;
+    if (el.type === "checkbox") rows[idx][field] = el.checked;
+    else if (el.type === "number") rows[idx][field] = Number(el.value);
+    else rows[idx][field] = el.value;
+  });
+  return rows;
+}
+
 async function fetchPipelineVelocity() {
   const PIPELINE_NAME = "세일즈 파이프라인";
   const deals = await salesmapGetAllDeals();
@@ -1818,24 +1940,29 @@ async function fetchPipelineVelocity() {
     }
   }
 
-  // 단계 순서 (파이프라인 순서 기준)
-  const STAGE_ORDER = ["거래 준비","회원가입 완료","신청서 작성 중","심사 중","자료 보완 중","실사/협의 중","자금집행 완료","결제 완료"];
-  const EXIT_STAGES = new Set(["결제 지연","신청 취소","진행 거절","보류 서류/계약"]);
+  // 매핑 적용
+  const mapping = loadPipelineMapping();
+  const mappingMap = Object.fromEntries(mapping.map(m => [m.stage, m]));
 
   const velocity = [];
+  // 매핑 순서 기준으로 정렬, include:true인 단계만
   const orderedStages = [
-    ...STAGE_ORDER.filter(s => stageData[s]),
-    ...Object.keys(stageData).filter(s => !STAGE_ORDER.includes(s) && !EXIT_STAGES.has(s))
+    ...mapping.filter(m => m.include && stageData[m.stage]).map(m => m.stage),
+    ...Object.keys(stageData).filter(s => !mappingMap[s] && stageData[s])
   ];
 
   for (const stage of orderedStages) {
     const { dwells } = stageData[stage];
+    const m = mappingMap[stage];
+    const label = m?.label || stage;
+    const cat   = m?.cat   || "기타";
+    const threshH = m?.threshH ?? 120;
     const p50h = +(percentileOf(dwells, 50) / 3600).toFixed(1);
     const p75h = +(percentileOf(dwells, 75) / 3600).toFixed(1);
     const p90h = +(percentileOf(dwells, 90) / 3600).toFixed(1);
-    const stuck = dwells.filter(d => d > percentileOf(dwells, 75)).length;
-    const risk = p90h >= 240 ? "high" : p90h >= 48 ? "medium" : "low";
-    velocity.push({ pipe: PIPELINE_NAME, stage, p50: p50h, p75: p75h, p90: p90h, stuck, risk });
+    const stuck = dwells.filter(d => d / 3600 > threshH).length;
+    const risk  = p90h >= threshH * 2 ? "high" : p90h >= threshH ? "medium" : "low";
+    velocity.push({ pipe: cat, stage: label, p50: p50h, p75: p75h, p90: p90h, stuck, risk });
   }
 
   STATE.velocity = velocity;
