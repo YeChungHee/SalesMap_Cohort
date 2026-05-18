@@ -1041,12 +1041,7 @@ const STATE = {
     { pipe:"세일즈", stage:"결제 완료",      p50:200,  p75:340,  p90:520,  stuck:2,  risk:"low"    }
   ],
 
-  regressions: [
-    { company:"(주)슈니테크",   from:"심사 중",       to:"신청서 작성 중", date:"2026-05-14", count:1 },
-    { company:"큐엠큐주식회사", from:"실사/협의 중",  to:"심사 중",        date:"2026-05-09", count:2 },
-    { company:"제로코퍼레이션", from:"자료 보완 중",  to:"심사 중",        date:"2026-05-03", count:1 },
-    { company:"테크솔루션",     from:"접촉 진행중",   to:"IN 리드",        date:"2026-05-01", count:1 }
-  ],
+  regressions: [],
 
   staging: [
     { id:"stg-001", company:"INNOS",        event:"payment_due",       reason:"payment_status 충돌",                    type:"manual",  confidence:"low" },
@@ -1425,7 +1420,12 @@ function renderVelocity() {
 
 // 단계 역행
 function renderRegressions() {
-  $("regression-rows").innerHTML = STATE.regressions.map(r => `<tr>
+  const rows = STATE.regressions;
+  if (!rows.length) {
+    $("regression-rows").innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--fg-4)">데이터 없음</td></tr>`;
+    return;
+  }
+  $("regression-rows").innerHTML = rows.map(r => `<tr>
     <td>${maskIfInvestor(r.company)}</td>
     <td>${r.from}</td>
     <td style="color:var(--red)">${r.to}</td>
