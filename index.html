@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.0.0</title>
+<title>세일즈맵 코호트 대시보드 v2.1.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -626,6 +626,18 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.1.0",
+    date: "2026-05-18",
+    label: "실데이터 연동 — 목업 전면 제거",
+    items: [
+      { type: "feat", text: "loadRealData() — 페이지 로드 시 SalesMap API 자동 호출" },
+      { type: "feat", text: "computeFromDeals() — 딜 목록에서 퍼널·KPI·코호트·영업사이클 계산" },
+      { type: "feat", text: "detectCurrentStage() — 플랫 키 기반 현재 단계 추출" },
+      { type: "fix",  text: "STATE 목업 배열 전면 제거 (cohortsBySource, monthlyCohort, cycles, velocity, staging, flags, events, qualityDist)" },
+      { type: "fix",  text: "각 렌더 함수에 로딩 중·데이터 없음 빈 상태 UI 추가" }
+    ]
+  },
+  {
     version: "2.0.0",
     date: "2026-05-18",
     label: "276 Holdings 디자인 시스템 적용",
@@ -996,73 +1008,20 @@ const STATE = {
   slaOverride: {},   // reportType → status override
   stagingReviewed: new Set(),
 
-  /* ─ 목업 데이터 ─ */
-  cohortsBySource: [
-    { source:"business_card", label:"명함",            input:182, leads:139, deals:48, paid:17, new_:112, retention:49, reactivated:21 },
-    { source:"expo",          label:"전시회",           input:420, leads:266, deals:91, paid:31, new_:290, retention:88, reactivated:42 },
-    { source:"url",           label:"URL",             input:88,  leads:54,  deals:19, paid:6,  new_:61,  retention:19,  reactivated:8  },
-    { source:"salesmap_search",label:"SalesMap 검색",  input:64,  leads:41,  deals:16, paid:4,  new_:40,  retention:16,  reactivated:8  }
-  ],
+  /* ─ 실데이터 (loadRealData()가 채움) ─ */
+  cohortsBySource: [],
+  monthlyCohort:   [],
+  cycles:          [],
+  velocity:        [],
+  regressions:     [],
+  funnelData:      null,      // null = 미로드
+  pipelineMetrics: null,      // null = 미로드
+  dataLoaded:      false,
+  dataLoading:     false,
 
-  monthlyCohort: [
-    { month:"2025-12", bc:[142,88,30,9],  expo:[355,218,70,20], url:[62,38,11,3],  sm:[48,29,10,2]  },
-    { month:"2026-01", bc:[158,115,41,13],expo:[380,238,80,26], url:[72,46,15,4],  sm:[54,35,12,3]  },
-    { month:"2026-02", bc:[169,126,44,14],expo:[395,250,84,27], url:[79,50,17,5],  sm:[58,37,13,3]  },
-    { month:"2026-03", bc:[175,131,46,15],expo:[408,258,87,29], url:[83,52,18,5],  sm:[61,39,14,4]  },
-    { month:"2026-04", bc:[180,136,47,16],expo:[415,263,89,30], url:[86,53,18,5],  sm:[63,40,15,4]  },
-    { month:"2026-05", bc:[182,139,48,17],expo:[420,266,91,31], url:[88,54,19,6],  sm:[64,41,16,4]  }
-  ],
-
-  cycles: [
-    { source:"명함",           p50:18, p75:31, p90:52, max:98,  outlier:2 },
-    { source:"전시회",         p50:14, p75:24, p90:41, max:83,  outlier:3 },
-    { source:"URL",           p50:22, p75:38, p90:64, max:120, outlier:4 },
-    { source:"SalesMap 검색", p50:11, p75:19, p90:33, max:71,  outlier:1 }
-  ],
-
-  velocity: [
-    // 리드 파이프라인
-    { pipe:"리드", stage:"IN 리드",         p50:18,   p75:32,   p90:58,   stuck:8,  risk:"medium" },
-    { pipe:"리드", stage:"OUT 리드",        p50:22,   p75:39,   p90:64,   stuck:6,  risk:"medium" },
-    { pipe:"리드", stage:"네트워크 리드",   p50:15,   p75:27,   p90:44,   stuck:4,  risk:"low"    },
-    { pipe:"리드", stage:"콜드메일 발송중", p50:96,   p75:148,  p90:210,  stuck:11, risk:"high"   },
-    { pipe:"리드", stage:"AI 분석완료",     p50:8,    p75:14,   p90:24,   stuck:3,  risk:"low"    },
-    { pipe:"리드", stage:"접촉 진행중",     p50:72,   p75:118,  p90:192,  stuck:14, risk:"high"   },
-    { pipe:"리드", stage:"1차상담 완료",    p50:48,   p75:84,   p90:136,  stuck:7,  risk:"medium" },
-    { pipe:"리드", stage:"이메일 안내완료", p50:36,   p75:61,   p90:98,   stuck:5,  risk:"medium" },
-    // 세일즈 파이프라인
-    { pipe:"세일즈", stage:"거래 준비",      p50:12,   p75:28,   p90:44,   stuck:4,  risk:"low"    },
-    { pipe:"세일즈", stage:"회원가입 완료",  p50:18,   p75:36,   p90:58,   stuck:3,  risk:"low"    },
-    { pipe:"세일즈", stage:"신청서 작성 중", p50:44,   p75:68,   p90:96,   stuck:6,  risk:"medium" },
-    { pipe:"세일즈", stage:"심사 중",        p50:68,   p75:124,  p90:198,  stuck:9,  risk:"medium" },
-    { pipe:"세일즈", stage:"자료 보완 중",   p50:52,   p75:88,   p90:138,  stuck:7,  risk:"medium" },
-    { pipe:"세일즈", stage:"실사/협의 중",   p50:116,  p75:194,  p90:298,  stuck:11, risk:"high"   },
-    { pipe:"세일즈", stage:"자금집행 완료",  p50:480,  p75:720,  p90:1080, stuck:5,  risk:"medium" },
-    { pipe:"세일즈", stage:"결제 완료",      p50:200,  p75:340,  p90:520,  stuck:2,  risk:"low"    }
-  ],
-
-  regressions: [],
-
-  staging: [
-    { id:"stg-001", company:"INNOS",        event:"payment_due",       reason:"payment_status 충돌",                    type:"manual",  confidence:"low" },
-    { id:"stg-002", company:"기술보증기금",  event:"email_sent",         reason:"event_at_utc 누락 (source_updated_at 있음)", type:"auto",   confidence:"low" },
-    { id:"stg-003", company:"(주)에이아이랩", event:"deal_created",     reason:"동일 회사 후보 2개",                     type:"manual",  confidence:"low" },
-    { id:"stg-004", company:"넥스트솔루션",  event:"source_quality_updated", reason:"amount 포맷 불일치 (정규화 가능)", type:"auto",   confidence:"low" },
-    { id:"stg-005", company:"테크빌",        event:"funding_executed",  reason:"funding 금액 불일치",                    type:"manual",  confidence:"low" }
-  ],
-
-  flags: [
-    { flag:"has_email",          total:754, missing:89,  label:"이메일" },
-    { flag:"has_business_number",total:754, missing:43,  label:"사업자번호" },
-    { flag:"has_phone",          total:754, missing:127, label:"전화번호" },
-    { flag:"has_company_name",   total:754, missing:12,  label:"회사명" }
-  ],
-
-  qualityDist: [
-    { range:"80–100 (high)",   count:312, color:"#16a34a" },
-    { range:"50–79 (medium)",  count:285, color:"#d97706" },
-    { range:"0–49 (low)",      count:157, color:"#dc2626" }
-  ],
+  staging:     [],
+  flags:       [],
+  qualityDist: [],
 
   slaJobs: [
     { id:"daily",     label:"일일",  period:"전일 00:00 ~ 23:59",                 cutoff:"익일 08:00",  publish:"익일 09:00",        status:"validated" },
@@ -1072,16 +1031,7 @@ const STATE = {
     { id:"annual",    label:"연간",  period:"전년 1월 1일 ~ 12월 31일",            cutoff:"1월 4일 08:00",  publish:"1월 4일 09:00",   status:"scheduled" }
   ],
 
-  events: [
-    { at:"2026-05-17 09:02", company:"큐엠큐주식회사",   event_type:"lead_created",        entity_type:"lead",    amount:null,   from_stage_id:null,   to_stage_id:"lead_01",  status:"validated" },
-    { at:"2026-05-17 09:14", company:"(주)슈니테크",      event_type:"deal_stage_changed",  entity_type:"deal",    amount:null,   from_stage_id:"d_02", to_stage_id:"d_03",     status:"validated" },
-    { at:"2026-05-17 10:20", company:"기술보증기금",       event_type:"email_opened",        entity_type:"activity",amount:null,   from_stage_id:null,   to_stage_id:null,       status:"validated" },
-    { at:"2026-05-17 11:05", company:"INNOS",             event_type:"payment_due",         entity_type:"payment", amount:5800000,from_stage_id:null,   to_stage_id:null,       status:"staging"   },
-    { at:"2026-05-17 12:30", company:"제로코퍼레이션",    event_type:"funding_executed",    entity_type:"funding", amount:120000000,from_stage_id:null, to_stage_id:null,       status:"validated" },
-    { at:"2026-05-16 15:48", company:"테크빌",            event_type:"deal_created",        entity_type:"deal",    amount:null,   from_stage_id:null,   to_stage_id:"d_01",     status:"validated" },
-    { at:"2026-05-16 16:10", company:"넥스트솔루션",      event_type:"payment_received",    entity_type:"payment", amount:3200000,from_stage_id:null,   to_stage_id:null,       status:"validated" },
-    { at:"2026-05-15 11:25", company:"(주)에이아이랩",    event_type:"deal_stage_changed",  entity_type:"deal",    amount:null,   from_stage_id:"d_03", to_stage_id:"d_02",     status:"staging"   }
-  ],
+  events: [],
 
   gate: [
     { n:1,  desc:"event_fingerprint SHA-256 해시 기준 확정",            cat:"데이터 모델",   done:true  },
@@ -1162,28 +1112,42 @@ function svgBar(data, w, h, color) {
 // KPI
 function renderKPI() {
   const t = cohortTotals();
+  const pm = STATE.pipelineMetrics;
+  if (!pm && !STATE.dataLoaded) {
+    const loading = STATE.dataLoading;
+    $("kpi-grid").innerHTML = Array(5).fill(0).map((_, i) => `
+      <div class="card kpi">
+        <div class="kpi-label">${["총 유입","리드 전환","딜 성사","결제 완료","평균 사이클"][i]}</div>
+        <div class="kpi-value" style="color:var(--fg-4)">${loading ? "…" : "–"}</div>
+        <div class="kpi-sub" style="color:var(--fg-4)">${loading ? "로딩 중" : "데이터 없음"}</div>
+      </div>`).join("");
+    return;
+  }
   const dealRate = t.input ? (t.deals / t.input * 100).toFixed(1) : 0;
   const payRate  = t.deals ? (t.paid  / t.deals * 100).toFixed(1) : 0;
-  const avgCycle = 16.4;
+  const avgCycle = pm?.avgCycleP50 ?? "–";
   const cards = [
-    { label:"총 유입",        value:fmt(t.input),        sub:"이번 기간 누적",           delta:"▲ 3.2%", dir:"up"   },
-    { label:"리드 전환",       value:fmt(t.leads),        sub:`전환율 ${pct(t.leads,t.input)}`, delta:"▲ 1.8%", dir:"up" },
-    { label:"딜 성사",         value:fmt(t.deals),        sub:`유입 대비 ${dealRate}%`,    delta:"▲ 0.9%", dir:"up"   },
-    { label:"결제 완료",       value:fmt(t.paid),         sub:`딜 대비 ${payRate}%`,       delta:"▼ 0.4%", dir:"down" },
-    { label:"평균 영업 사이클", value:`${avgCycle}일`,     sub:"성사 딜 P50 기준",          delta:"▼ 1.2일", dir:"up"  }
+    { label:"총 유입",        value: t.input ? fmt(t.input) : (pm?.totalDeals ? fmt(pm.totalDeals) : "–"), sub:"이번 기간 누적" },
+    { label:"리드 전환",       value: t.leads ? fmt(t.leads) : "–",  sub:`전환율 ${t.input ? pct(t.leads,t.input) : "–"}` },
+    { label:"딜 성사",         value: pm ? fmt(pm.wonDeals)  : (t.deals ? fmt(t.deals) : "–"), sub: pm ? `성사율 ${pm.totalDeals ? (pm.wonDeals/pm.totalDeals*100).toFixed(1) : 0}%` : `유입 대비 ${dealRate}%` },
+    { label:"결제 완료",       value: pm ? fmt(pm.paidDeals ?? pm.wonDeals) : (t.paid ? fmt(t.paid) : "–"), sub: pm ? "결제 완료 누적" : `딜 대비 ${payRate}%` },
+    { label:"평균 영업 사이클", value: avgCycle !== "–" ? `${avgCycle}일` : "–", sub:"성사 딜 P50 기준" }
   ];
   $("kpi-grid").innerHTML = cards.map(c => `
     <div class="card kpi">
       <div class="kpi-label">${c.label}</div>
       <div class="kpi-value">${c.value}</div>
       <div class="kpi-sub">${c.sub}</div>
-      <div class="kpi-delta ${c.dir}">${c.delta}</div>
     </div>`).join("");
 }
 
 // 코호트 테이블
 function renderCohortTable() {
   const cols = filteredCohorts();
+  if (!cols.length) {
+    $("cohort-rows").innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
+    return;
+  }
   $("cohort-rows").innerHTML = cols.map(c => {
     const dr = c.input ? (c.deals/c.input*100).toFixed(1) : 0;
     const barW = Math.min(Number(dr), 100);
@@ -1203,16 +1167,21 @@ function renderCohortTable() {
 
 // 깔때기
 function renderFunnel() {
-  // 세일즈 파이프라인 단계별 딜 수 (SalesMap 기준 목업)
+  if (!STATE.funnelData && !STATE.dataLoaded) {
+    const el = $("funnel-wrap") || $("funnel-chart");
+    if (el) el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    return;
+  }
+  const fd = STATE.funnelData || [];
   const FUNNEL_STAGES = [
-    { stage:"거래 준비",      count: STATE.funnelData?.[0] ?? 70 },
-    { stage:"회원가입 완료",  count: STATE.funnelData?.[1] ?? 69 },
-    { stage:"신청서 작성 중", count: STATE.funnelData?.[2] ?? 67 },
-    { stage:"심사 중",        count: STATE.funnelData?.[3] ?? 67 },
-    { stage:"자료 보완 중",   count: STATE.funnelData?.[4] ?? 65 },
-    { stage:"실사/협의 중",   count: STATE.funnelData?.[5] ?? 64 },
-    { stage:"자금집행 완료",  count: STATE.funnelData?.[6] ?? 63 },
-    { stage:"결제 완료",      count: STATE.funnelData?.[7] ?? 44 }
+    { stage:"거래 준비",      count: fd[0] ?? 0 },
+    { stage:"회원가입 완료",  count: fd[1] ?? 0 },
+    { stage:"신청서 작성 중", count: fd[2] ?? 0 },
+    { stage:"심사 중",        count: fd[3] ?? 0 },
+    { stage:"자료 보완 중",   count: fd[4] ?? 0 },
+    { stage:"실사/협의 중",   count: fd[5] ?? 0 },
+    { stage:"자금집행 완료",  count: fd[6] ?? 0 },
+    { stage:"결제 완료",      count: fd[7] ?? 0 }
   ];
   const top = FUNNEL_STAGES[0].count || 1;
   const n   = FUNNEL_STAGES.length;
@@ -1290,6 +1259,10 @@ function renderFreshness() {
 // 고객 유형
 function renderCustomerType() {
   const t = cohortTotals();
+  if (!t.input && !STATE.dataLoaded) {
+    $("customer-type-chart").innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    return;
+  }
   const total = t.new_ + t.retention + t.reactivated || 1;
   const items = [
     { label:"신규",    value:t.new_,        color:var_("--blue"),   pct: (t.new_/total*100).toFixed(0) },
@@ -1315,13 +1288,21 @@ function var_(name) {
 
 // 코호트 히트맵
 function renderHeatmap() {
-  const sources = [
-    { key:"bc",  label:"명함" },
-    { key:"expo",label:"전시회" },
-    { key:"url", label:"URL" },
-    { key:"sm",  label:"SM검색" }
-  ];
-  const srcMap = { bc:0, expo:1, url:2, sm:3 };
+  if (!STATE.monthlyCohort.length) {
+    const el = $("heatmap-wrap");
+    if (el) el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    return;
+  }
+  // 실데이터: monthlyCohort rows have { month, input, leads, deals, paid }
+  // Build dynamic source list from first row keys
+  const firstRow = STATE.monthlyCohort[0] || {};
+  const sourceKeys = Object.keys(firstRow).filter(k => k !== "month" && !["input","leads","deals","paid","retention","reactivated"].includes(k));
+
+  // If source-keyed heatmap data exists, use it; otherwise show monthly deal conversion rate
+  const hasSrcData = sourceKeys.length > 0;
+  const sources = hasSrcData
+    ? sourceKeys.map(k => ({ key:k, label:k }))
+    : [{ key:"_all", label:"전체" }];
 
   let html = `<table style="border-collapse:separate;border-spacing:4px"><thead><tr><th style="text-align:left;font-size:12px;color:var(--muted);padding:4px 8px">월</th>`;
   sources.forEach(s => { html += `<th style="font-size:12px;color:var(--muted);padding:4px 10px">${s.label}</th>`; });
@@ -1330,10 +1311,15 @@ function renderHeatmap() {
   STATE.monthlyCohort.forEach(row => {
     html += `<tr><td style="font-size:12px;color:var(--muted);padding:4px 8px;white-space:nowrap">${row.month}</td>`;
     sources.forEach(s => {
-      const arr = row[s.key];
-      if (!arr) { html += `<td></td>`; return; }
-      const [input,,deals] = arr;
-      const rate = input ? (deals/input*100) : 0;
+      let rate = 0;
+      if (s.key === "_all") {
+        rate = row.input ? (row.deals / row.input * 100) : 0;
+      } else {
+        const arr = row[s.key];
+        if (!arr) { html += `<td></td>`; return; }
+        const [input,,deals] = Array.isArray(arr) ? arr : [arr.input, arr.leads, arr.deals];
+        rate = input ? (deals/input*100) : 0;
+      }
       const [bg, tc] = rate > 22 ? ["#166534","#fff"] : rate > 16 ? ["#16a34a","#fff"] : rate > 10 ? ["#86efac","#166534"] : rate > 5 ? ["#fde68a","#92400e"] : ["#fee2e2","#991b1b"];
       html += `<td><div class="heatmap-cell" style="width:72px;height:36px;background:${bg};color:${tc}" title="${row.month} ${s.label}: ${rate.toFixed(1)}%">${rate.toFixed(1)}%</div></td>`;
     });
@@ -1352,6 +1338,10 @@ function renderHeatmap() {
 
 // 영업 사이클
 function renderCycles() {
+  if (!STATE.cycles.length) {
+    $("cycle-rows").innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
+    return;
+  }
   $("cycle-rows").innerHTML = STATE.cycles.map(c => `<tr>
     <td>${c.source}</td>
     <td><strong>${c.p50}일</strong></td>
@@ -1364,35 +1354,51 @@ function renderCycles() {
 
 // 리텐션 차트
 function renderRetention() {
-  const data = [
-    { l:"12월", v:63 }, { l:"1월", v:71 }, { l:"2월", v:79 },
-    { l:"3월", v:85 }, { l:"4월", v:91 }, { l:"5월", v:88 }
-  ];
-  $("retention-chart").innerHTML = `
+  const el = $("retention-chart");
+  if (!el) return;
+  if (!STATE.dataLoaded) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    return;
+  }
+  const monthly = STATE.monthlyCohort;
+  if (!monthly.length) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">데이터 없음</div>`;
+    return;
+  }
+  const data = monthly.map(row => {
+    const total = (row.retention ?? 0) + (row.reactivated ?? 0);
+    return { l: (row.month || "").slice(5), v: total };
+  });
+  el.innerHTML = `
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">재구매(리텐션 + 재활성화) 건수</div>
     ${svgBar(data, 340, 100, "#7c3aed")}
-    <div style="margin-top:8px;font-size:12px;color:var(--muted)">최근 6개월 추이 — 5월 일부 기간 포함</div>`;
+    <div style="margin-top:8px;font-size:12px;color:var(--muted)">월별 추이</div>`;
 }
 
 // 파이프라인 KPI 카드
 function renderPipelineCards() {
   const el = $("pipeline-cards");
   if (!el) return;
-  // 딜 퍼널 기준 목업 (SalesMap 실데이터 스크린샷)
-  const totalDeals    = 70;   // 거래 준비 기준
-  const wonDeals      = 44;   // 결제 완료 누적
-  const lostDeals     = 9;    // 결제지연2+진행거절4+신청취소2+보류1
-  const activeDeals   = totalDeals - wonDeals - lostDeals;
-  const winRate       = (wonDeals / totalDeals * 100).toFixed(1);
-  const totalLeads    = 1084; // SalesMap 단계별 퍼널 기준
-  const leadToSales   = (totalDeals / totalLeads * 100).toFixed(1);
+  const pm = STATE.pipelineMetrics;
+  if (!pm) {
+    el.innerHTML = Array(6).fill(0).map((_, i) => `
+      <div class="card kpi">
+        <div class="kpi-label">${["총 진행 딜","누적 성사","누적 이탈","리드→딜 전환","리드 파이프라인","평균 사이클"][i]}</div>
+        <div class="kpi-value" style="color:var(--fg-4)">${STATE.dataLoading ? "…" : "–"}</div>
+        <div class="kpi-sub" style="color:var(--fg-4)">${STATE.dataLoading ? "로딩 중" : "데이터 없음"}</div>
+      </div>`).join("");
+    return;
+  }
+  const { totalDeals, wonDeals, lostDeals, activeDeals, totalLeads, sqlLeads, avgCycleP50 } = pm;
+  const winRate    = totalDeals ? (wonDeals / totalDeals * 100).toFixed(1) : 0;
+  const leadToSales = totalLeads ? (totalDeals / totalLeads * 100).toFixed(1) : "–";
   const cards = [
-    { label:"총 진행 딜",     value: fmt(activeDeals),          sub:`전체 ${fmt(totalDeals)}건 중`,      color:"blue"   },
-    { label:"누적 성사",      value: fmt(wonDeals),             sub:`성사율 ${winRate}%`,               color:"green"  },
-    { label:"누적 이탈",      value: fmt(lostDeals),            sub:"결제지연·거절·취소·보류",           color:"red"    },
-    { label:"리드→딜 전환",   value: `${leadToSales}%`,         sub:`리드 ${fmt(totalLeads)}건 대비`,    color:"orange" },
-    { label:"리드 파이프라인", value: fmt(29),                   sub:"영업대상 확정 (SQL)",              color:"purple" },
-    { label:"평균 영업 사이클",value: "48일",                    sub:"리드 진입→결제 완료 P50",          color:"gray"   }
+    { label:"총 진행 딜",     value: fmt(activeDeals),   sub:`전체 ${fmt(totalDeals)}건 중`,      color:"blue"   },
+    { label:"누적 성사",      value: fmt(wonDeals),      sub:`성사율 ${winRate}%`,               color:"green"  },
+    { label:"누적 이탈",      value: fmt(lostDeals),     sub:"결제지연·거절·취소·보류",           color:"red"    },
+    { label:"리드→딜 전환",   value: totalLeads ? `${leadToSales}%` : "–", sub: totalLeads ? `리드 ${fmt(totalLeads)}건 대비` : "리드 데이터 없음", color:"orange" },
+    { label:"리드 파이프라인", value: sqlLeads != null ? fmt(sqlLeads) : "–", sub:"영업대상 확정 (SQL)", color:"purple" },
+    { label:"평균 영업 사이클",value: avgCycleP50 ? `${avgCycleP50}일` : "–", sub:"리드 진입→결제 완료 P50", color:"gray" }
   ];
   el.innerHTML = cards.map(c => `
     <div class="card kpi">
@@ -1404,6 +1410,10 @@ function renderPipelineCards() {
 
 // 스테이지 체류
 function renderVelocity() {
+  if (!STATE.velocity.length) {
+    $("velocity-rows").innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음 — API 새로고침을 눌러주세요"}</td></tr>`;
+    return;
+  }
   $("velocity-rows").innerHTML = STATE.velocity.map(v => {
     const rc = v.risk === "high" ? "red" : v.risk === "medium" ? "orange" : "green";
     return `<tr>
@@ -2040,6 +2050,155 @@ async function salesmapGetAllDeals(maxPages = 10) {
   return deals;
 }
 
+// ══════════════════════════════════════════════
+//  실데이터 연동 — computeFromDeals / loadRealData
+// ══════════════════════════════════════════════
+
+// 딜 객체에서 현재 단계명 추출
+function detectCurrentStage(deal, pipelineName) {
+  // 직접 필드 시도
+  const direct = deal.currentStageName || deal.stageName || deal.dealStageName || deal.stage_name || deal["현재 단계"] || deal["단계"];
+  if (direct) return String(direct);
+  // 플랫 키에서 진입 날짜가 있는 마지막 단계를 현재 단계로 추정
+  const stages = parseStageDwells(deal, pipelineName);
+  let last = null, lastTs = 0;
+  for (const [stage, info] of Object.entries(stages)) {
+    if (info.enteredTs && info.enteredTs > lastTs) { last = stage; lastTs = info.enteredTs; }
+  }
+  return last;
+}
+
+// 딜 데이터에서 유입 소스 추출
+function detectDealSource(deal) {
+  const raw = deal["소스"] || deal["유입경로"] || deal["source"] || deal["sourceType"] || deal["lead_source"] || deal["채널"] || "";
+  if (!raw) return null;
+  return String(raw).trim();
+}
+
+// 딜 목록에서 대시보드 지표 계산
+function computeFromDeals(deals) {
+  const mapping = loadPipelineMapping();
+  const salesMap = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
+  const leadMap  = Object.fromEntries(mapping.filter(m => m.pipe === "리드" ).map(m => [m.stage, m]));
+
+  const wonStages  = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
+  const lostStages = Object.values(salesMap).filter(m => m.cat === "실패").map(m => m.stage);
+  const sqlStages  = Object.values(leadMap ).filter(m => m.cat === "종료" && m.include).map(m => m.stage);
+
+  // 단계별 현재 카운트 (세일즈 파이프라인)
+  const stageCounts = {};
+  const dealWonCycleSec = [];       // 성사 딜 전체 체류 합산 (영업 사이클)
+  const monthlyMap = {};            // YYYY-MM → { input, leads, deals, paid }
+  const sourceMap  = {};            // source → { input, deals, paid }
+
+  for (const deal of deals) {
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    if (cur) stageCounts[cur] = (stageCounts[cur] || 0) + 1;
+
+    // 소스 집계
+    const src = detectDealSource(deal);
+    if (src) {
+      if (!sourceMap[src]) sourceMap[src] = { input:0, deals:0, paid:0 };
+      sourceMap[src].input++;
+      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;
+      if (cur && cur === "결제 완료")      sourceMap[src].paid++;
+    }
+
+    // 월별 집계 — 거래 준비 진입 날짜 기준
+    const entryKey = `거래 준비(세일즈 파이프라인)로 진입한 날짜`;
+    const entryRaw = deal[entryKey];
+    if (entryRaw) {
+      const month = String(entryRaw).slice(0, 7);
+      if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0 };
+      monthlyMap[month].input++;
+      if (cur && wonStages.includes(cur)) monthlyMap[month].deals++;
+      if (cur && cur === "결제 완료")     monthlyMap[month].paid++;
+    }
+
+    // 성사 딜 영업 사이클 (누적 체류 합산)
+    if (cur && wonStages.includes(cur)) {
+      const dwells = parseStageDwells(deal, "세일즈 파이프라인");
+      const totalSec = Object.values(dwells).reduce((s, d) => s + (d.dwellSec || 0), 0);
+      if (totalSec > 0) dealWonCycleSec.push(totalSec);
+    }
+  }
+
+  // 리드 파이프라인 딜도 가져오기 (salesmapGetAllDeals은 전체 딜을 가져옴)
+  // 리드 단계에 있는 딜 집계
+  let totalLeads = 0, sqlLeads = 0;
+  for (const deal of deals) {
+    const cur = detectCurrentStage(deal, "리드 파이프라인");
+    if (cur && leadMap[cur]) {
+      totalLeads++;
+      if (sqlStages.includes(cur)) sqlLeads++;
+    }
+  }
+
+  const totalDeals  = deals.length;
+  const wonDeals    = wonStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
+  const lostDeals   = lostStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
+  const activeDeals = totalDeals - wonDeals - lostDeals;
+  const avgCycleP50 = dealWonCycleSec.length
+    ? +(percentileOf(dealWonCycleSec, 50) / 86400).toFixed(1) : null;
+
+  // STATE 업데이트
+  STATE.pipelineMetrics = { totalDeals, wonDeals, lostDeals, activeDeals, totalLeads: totalLeads || null, sqlLeads: sqlLeads || null, avgCycleP50 };
+
+  // 퍼널 데이터 (세일즈 파이프라인 단계 순서)
+  const funnelOrder = ["거래 준비","회원가입 완료","신청서 작성 중","심사 중","자료 보완 중","실사/협의 중","자금집행 완료","결제 완료"];
+  STATE.funnelData = funnelOrder.map(s => stageCounts[s] || 0);
+
+  // 월별 코호트
+  STATE.monthlyCohort = Object.entries(monthlyMap)
+    .sort(([a],[b]) => a.localeCompare(b))
+    .map(([month, v]) => ({ month, ...v }));
+
+  // 소스별 코호트
+  if (Object.keys(sourceMap).length) {
+    STATE.cohortsBySource = Object.entries(sourceMap).map(([source, v]) => ({
+      source, label: source, input: v.input, leads: v.input, deals: v.deals, paid: v.paid,
+      new_: v.input, retention: 0, reactivated: 0
+    }));
+  }
+
+  // 영업 사이클 (파이프라인 전체)
+  if (dealWonCycleSec.length) {
+    const toDay = sec => +(sec / 86400).toFixed(1);
+    STATE.cycles = [{
+      source: "전체",
+      p50: toDay(percentileOf(dealWonCycleSec, 50)),
+      p75: toDay(percentileOf(dealWonCycleSec, 75)),
+      p90: toDay(percentileOf(dealWonCycleSec, 90)),
+      max: toDay(Math.max(...dealWonCycleSec)),
+      outlier: dealWonCycleSec.filter(s => s / 86400 > 90).length
+    }];
+  }
+
+  STATE.dataLoaded = true;
+}
+
+// 실데이터 전체 로딩
+async function loadRealData() {
+  const cfg = salesmapConfig();
+  if (!cfg.ready) return;
+  if (STATE.dataLoading) return;
+  STATE.dataLoading = true;
+  renderKPI(); renderPipelineCards(); renderCohortTable(); renderFunnel();
+  try {
+    const deals = await salesmapGetAllDeals(20);
+    if (deals.length) {
+      computeFromDeals(deals);
+      // 체류 시간도 함께 계산
+      await fetchPipelineVelocity().catch(() => {});
+    }
+  } catch(e) {
+    console.warn("loadRealData failed:", e.message);
+  } finally {
+    STATE.dataLoading = false;
+    renderAll();
+  }
+}
+
 // ── 파이프라인 매핑 ──
 // 세일즈 파이프라인 — 정체 기준일 × 24 = threshH
 const PIPELINE_STAGE_DEFAULTS = [
@@ -2314,8 +2473,9 @@ async function handleRefreshDwellHeatmap() {
 // 1분마다 자동 갱신 (SLA 카운트다운)
 setInterval(() => { renderSLA(); $("topbar-asof").textContent = "기준: " + now(); }, 60000);
 
-// 초기 렌더
+// 초기 렌더 → 토큰 설정 시 실데이터 자동 로드
 renderAll();
+loadRealData();
 </script>
 </body>
 </html>
