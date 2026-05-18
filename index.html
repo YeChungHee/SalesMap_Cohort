@@ -1551,6 +1551,33 @@ function renderQualityChart() {
   }).join("");
 }
 
+// SLA 자동 판정
+function computeSLAStatus() {
+  const loadedAt = STATE.dataLoadedAt;
+  if (!loadedAt) return {}; // no data loaded yet
+
+  const ageH = (Date.now() - loadedAt) / 3600000;
+  const loadDate = new Date(loadedAt);
+
+  // Find last Friday 16:30 KST (UTC+9)
+  function lastFriday1630KST() {
+    const d = new Date();
+    const dayKST = (d.getUTCDay() + Math.floor((d.getUTCHours() + 9) / 24)) % 7;
+    const daysBack = (dayKST - 5 + 7) % 7 || 7;
+    const fri = new Date(d);
+    fri.setUTCDate(d.getUTCDate() - daysBack);
+    fri.setUTCHours(7, 30, 0, 0); // 16:30 KST = 07:30 UTC
+    return fri;
+  }
+
+  const daily = ageH <= 25 ? "validated" : ageH <= 48 ? "delayed" : "failed";
+  const lastFri = lastFriday1630KST();
+  const weekly  = loadedAt >= lastFri.getTime() ? "validated" : ageH <= 168 ? "delayed" : "failed";
+  const monthly = loadDate.getDate() === 1 && ageH <= 24 ? "validated" : "scheduled";
+
+  return { daily, weekly, monthly };
+}
+
 // SLA 카드
 function renderSLA() {
   const now_ = new Date();
@@ -1570,7 +1597,7 @@ function renderSLA() {
   const cdClass = diffH < 2 ? "crit" : diffH < 12 ? "warn" : "";
 
   $("sla-cards").innerHTML = STATE.slaJobs.map(j => {
-    const st = STATE.slaOverride[j.id] || j.status;
+    const auto = computeSLAStatus(); const st = STATE.slaOverride[j.id] || auto[j.id] || j.status;
     const sc = st === "validated" ? "green" : st === "delayed" ? "orange" : st === "failed" ? "red" : "blue";
     const icon = st === "validated" ? "✅" : st === "delayed" ? "⏳" : st === "failed" ? "❌" : st === "partial" ? "⚡" : "🕐";
     const countdown = j.id === "weekly"
@@ -1586,6 +1613,30 @@ function renderSLA() {
       <div>${statusPill(st)}</div>
     </div>`;
   }).join("");
+}
+
+// Slack 실전송
+async function sendSlackNotification(msg) {
+  const webhook = localStorage.getItem("cohort_slack_webhook") || "";
+  if (!webhook) throw new Error("Slack Webhook URL 미설정");
+  const payload = JSON.stringify({ text: msg });
+  const cfg = salesmapConfig();
+  // Try Worker proxy first (avoids CORS issues), then direct
+  if (cfg.useWorker) {
+    const base = cfg.workerUrl.replace(/\/$/, "");
+    for (const ep of [base, `${base}/proxy`]) {
+      try {
+        const res = await fetch(ep, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: webhook, method: "POST", headers: { "Content-Type": "application/json" }, body: payload })
+        });
+        if (res.ok) return;
+      } catch {}
+    }
+  }
+  // Direct (may fail due to CORS)
+  await fetch(webhook, { method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" }, body: payload });
 }
 
 // Slack 메시지
@@ -1827,6 +1878,8 @@ function renderSettingsView() {
   const s = STATE.settings;
   if (s.slackUser) $("inp-slack-user").value = s.slackUser;
   if (s.slackUserId) $("inp-slack-id").value = s.slackUserId;
+  if ($("inp-slack-webhook")) $("inp-slack-webhook").value = localStorage.getItem("cohort_slack_webhook") || "";
+  if ($("inp-source-field")) $("inp-source-field").value = s.sourceField || "";
 }
 
 // RBAC 뱃지
@@ -1912,6 +1965,25 @@ $("btn-clear-history").addEventListener("click", () => {
 });
 document.getElementById("select-status").addEventListener("change", renderSlack);
 
+$("btn-send-slack-real")?.addEventListener("click", async () => {
+  const msg = $("slack-preview").textContent;
+  const btn = $("btn-send-slack-real");
+  if (btn) { btn.disabled = true; btn.textContent = "전송 중..."; }
+  try {
+    await sendSlackNotification(msg);
+    const h = JSON.parse(localStorage.getItem("cohortHistory") || "[]");
+    const st = $("select-status").value;
+    h.push({ report:"주간", status:st, at:now() });
+    localStorage.setItem("cohortHistory", JSON.stringify(h.slice(-30)));
+    toast("Slack 전송 완료 및 이력 기록");
+    renderNotifyHistory();
+  } catch(e) {
+    toast("Slack 전송 실패: " + e.message, 4000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Slack 전송"; }
+  }
+});
+
 // SLA 시뮬레이션
 $("btn-sim-delay").addEventListener("click", () => {
   STATE.slaOverride["weekly"] = "delayed";
@@ -1973,9 +2045,11 @@ $("btn-reset-mapping").addEventListener("click", () => {
 $("btn-save-settings").addEventListener("click", () => {
   STATE.settings = {
     slackUser:   $("inp-slack-user").value.trim() || "@예충희",
-    slackUserId: $("inp-slack-id").value.trim()
+    slackUserId: $("inp-slack-id").value.trim(),
+    sourceField: $("inp-source-field")?.value.trim() || ""
   };
   localStorage.setItem("cohortSettings", JSON.stringify(STATE.settings));
+  localStorage.setItem("cohort_slack_webhook", $("inp-slack-webhook")?.value.trim() || "");
   toast("설정이 저장되었습니다.");
   renderAll();
 });
@@ -2280,16 +2354,16 @@ async function loadRealData() {
   STATE.dataLoading = true;
   renderKPI(); renderPipelineCards(); renderCohortTable(); renderFunnel();
   try {
-    const deals = await salesmapGetAllDeals(20);
+    const [deals, leads] = await Promise.all([salesmapGetAllDeals(20), salesmapGetAllLeads(10)]);
     if (deals.length) {
-      computeFromDeals(deals);
-      // 체류 시간도 함께 계산
-      await fetchPipelineVelocity().catch(() => {});
+      computeFromDeals(deals, leads);
+      fetchPipelineVelocityFromDeals(deals).catch(() => {});
     }
   } catch(e) {
     console.warn("loadRealData failed:", e.message);
   } finally {
     STATE.dataLoading = false;
+    STATE.dataLoadedAt = Date.now();
     renderAll();
   }
 }
@@ -2420,6 +2494,38 @@ async function fetchPipelineVelocity() {
   }
 
   STATE.velocity = velocity;
+  renderVelocity();
+}
+
+async function fetchPipelineVelocityFromDeals(deals) {
+  if (!deals.length) return;
+  const PIPELINE_NAME = "세일즈 파이프라인";
+  const stageData = {};
+  for (const deal of deals) {
+    const parsed = parseStageDwells(deal, PIPELINE_NAME);
+    for (const [stage, info] of Object.entries(parsed)) {
+      if (info.dwellSec == null) continue;
+      if (!stageData[stage]) stageData[stage] = { dwells: [] };
+      stageData[stage].dwells.push(info.dwellSec);
+    }
+  }
+  const mapping = loadPipelineMapping();
+  const mappingMap = Object.fromEntries(mapping.map(m => [m.stage, m]));
+  const orderedStages = [
+    ...mapping.filter(m => m.include && stageData[m.stage]).map(m => m.stage),
+    ...Object.keys(stageData).filter(s => !mappingMap[s])
+  ];
+  STATE.velocity = orderedStages.map(stage => {
+    const { dwells } = stageData[stage];
+    const m = mappingMap[stage];
+    const threshH = m?.threshH ?? 120;
+    const p50h = +(percentileOf(dwells, 50) / 3600).toFixed(1);
+    const p75h = +(percentileOf(dwells, 75) / 3600).toFixed(1);
+    const p90h = +(percentileOf(dwells, 90) / 3600).toFixed(1);
+    const stuck = dwells.filter(d => d / 3600 > threshH).length;
+    const risk  = p90h >= threshH * 2 ? "high" : p90h >= threshH ? "medium" : "low";
+    return { pipe: m?.cat || "기타", stage: m?.label || stage, p50: p50h, p75: p75h, p90: p90h, stuck, risk };
+  });
   renderVelocity();
 }
 
