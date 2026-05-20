@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.3.6</title>
+<title>세일즈맵 코호트 대시보드 v2.3.7</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -647,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.6</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.7</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -663,6 +663,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.7",
+    date: "2026-05-20",
+    label: "유입경로 대분류 집계 + 세그먼트 인라인 업체 표시",
+    items: [
+      { type:"feat", text:"유입 필터 드롭다운 — 대분류만 표시 (네트워크·아웃바운드 등), 선택 시 하위 채널 전부 포함 집계" },
+      { type:"feat", text:"코호트 전환 현황 — 대분류 집계 행 표시, 클릭 시 세부 채널별 팝업 (유입·딜 전환·결제·전환율)" },
+      { type:"feat", text:"월별 추이 세그먼트 클릭 — 팝업 제거, 차트 아래 인라인 패널에 업체명 태그로 표시" }
+    ]
+  },
   {
     version: "2.3.6",
     date: "2026-05-20",
@@ -1198,9 +1208,14 @@ const STATE = {
 // ══════════════════════════════════════════════
 //  헬퍼
 // ══════════════════════════════════════════════
+// 대분류 선택 시 " · " 구분자 하위 소스 전부 포함
+function topLevelOf(src) { return (src || "").split(" · ")[0].trim(); }
+
 function filteredCohorts() {
   if (STATE.source === "all") return STATE.cohortsBySource;
-  return STATE.cohortsBySource.filter(c => c.source === STATE.source);
+  return STATE.cohortsBySource.filter(c =>
+    topLevelOf(c.source) === STATE.source
+  );
 }
 
 function cohortTotals() {
@@ -1273,25 +1288,106 @@ function renderKPI() {
 // 코호트 테이블
 function renderCohortTable() {
   const cols = filteredCohorts();
+  const tbody = $("cohort-rows");
   if (!cols.length) {
-    $("cohort-rows").innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
     return;
   }
-  $("cohort-rows").innerHTML = cols.map(c => {
-    const dr = c.input ? (c.deals/c.input*100).toFixed(1) : 0;
+
+  // 대분류로 집계
+  const groupMap = {};
+  cols.forEach(c => {
+    const top = topLevelOf(c.source);
+    if (!groupMap[top]) groupMap[top] = { label: top, items: [], input:0, leads:0, deals:0, paid:0, new_:0, retention:0, reactivated:0 };
+    const g = groupMap[top];
+    g.items.push(c);
+    g.input += c.input; g.leads += c.leads; g.deals += c.deals; g.paid += c.paid;
+    g.new_ += (c.new_ || 0); g.retention += (c.retention || 0); g.reactivated += (c.reactivated || 0);
+  });
+
+  tbody.innerHTML = "";
+  Object.values(groupMap).forEach(g => {
+    const dr   = g.input ? (g.deals / g.input * 100).toFixed(1) : 0;
     const barW = Math.min(Number(dr), 100);
-    const custBreak = `${Math.round(c.new_/c.input*100)}% 신규`;
-    return `<tr>
-      <td>${c.label}</td>
-      <td>${fmt(c.input)}</td>
-      <td>${fmt(c.leads)} <span style="color:var(--muted);font-size:11px">(${pct(c.leads,c.input)})</span></td>
-      <td>${fmt(c.deals)} <span style="color:var(--muted);font-size:11px">(${pct(c.deals,c.input)})</span></td>
-      <td>${isInvestor() ? fmt(c.paid) : maskIfInvestor(fmt(c.paid))}</td>
+    const custBreak = g.input ? `${Math.round((g.new_ / g.input) * 100)}% 신규` : "–";
+    const hasSub = g.items.length > 1;
+
+    const tr = document.createElement("tr");
+    if (hasSub) tr.style.cssText = "cursor:pointer";
+    if (hasSub) tr.title = "클릭해서 세부 내역 확인";
+    tr.innerHTML = `
+      <td style="font-weight:${hasSub ? 600 : 400}">
+        ${g.label}
+        ${hasSub ? `<span style="font-size:10px;font-weight:500;color:var(--primary-500);margin-left:5px">▸ ${g.items.length}개 세부채널</span>` : ""}
+      </td>
+      <td>${fmt(g.input)}</td>
+      <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
+      <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
+      <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
       <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
-      <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>
-    </tr>`;
-  }).join("");
+      <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
+    if (hasSub) {
+      tr.addEventListener("click", () => _showCohortDetailPopup(g));
+    }
+    tbody.appendChild(tr);
+  });
   $("cohort-period-label").textContent = STATE.period;
+}
+
+// 코호트 세부 채널 팝업
+function _showCohortDetailPopup(group) {
+  let ov = document.getElementById("_cohort-detail-ov");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "_cohort-detail-ov";
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center";
+    ov.addEventListener("click", e => { if (e.target === ov) ov.style.display = "none"; });
+    const box = document.createElement("div");
+    box.style.cssText = "background:#fff;border-radius:12px;padding:0;min-width:560px;max-width:700px;max-height:80vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column";
+    box.addEventListener("click", e => e.stopPropagation());
+    const hdr = document.createElement("div");
+    hdr.id = "_cdp-hdr";
+    hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #eee";
+    const title = document.createElement("h3");
+    title.id = "_cdp-title";
+    title.style.cssText = "margin:0;font-size:15px;font-weight:700;color:#1a1a2e";
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "×";
+    closeBtn.style.cssText = "border:none;background:none;cursor:pointer;font-size:24px;color:#aaa;line-height:1;padding:0";
+    closeBtn.addEventListener("click", () => ov.style.display = "none");
+    hdr.appendChild(title); hdr.appendChild(closeBtn);
+    const tblWrap = document.createElement("div");
+    tblWrap.id = "_cdp-body";
+    tblWrap.style.cssText = "overflow-y:auto;flex:1";
+    box.appendChild(hdr); box.appendChild(tblWrap);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+  }
+
+  document.getElementById("_cdp-title").textContent = `${group.label} — 세부 채널 내역 (${group.items.length}개)`;
+  const body = document.getElementById("_cdp-body");
+  let html = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr style="background:#f8f9fa">
+      <th style="text-align:left;padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600">채널</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">유입</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">딜 전환</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">결제</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">딜 전환율</th>
+    </tr></thead><tbody>`;
+  group.items.sort((a, b) => b.input - a.input).forEach((c, i) => {
+    const sub = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : c.source;
+    const dr2 = c.input ? (c.deals / c.input * 100).toFixed(1) : "0.0";
+    html += `<tr style="border-top:1px solid #f0f0f0;${i % 2 === 0 ? "" : "background:#fafafa"}">
+      <td style="padding:10px 16px;font-size:13px">${sub}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.input)}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.deals)}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.paid)}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:13px;color:${Number(dr2)>50?"#16a34a":Number(dr2)>20?"#d97706":"#6b7684"};font-weight:600">${dr2}%</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  body.innerHTML = html;
+  ov.style.display = "flex";
 }
 
 // 깔때기
@@ -2004,14 +2100,18 @@ function renderSettingsView() {
 function repopulateSourceFilter() {
   const sel = document.getElementById("ctrl-source");
   if (!sel) return;
-  const sources = [...new Set(
-    STATE.cohortsBySource.map(c => c.source).filter(s => s && s !== "전체")
+  // 대분류만 추출 (· 구분자 이전)
+  const topLevels = [...new Set(
+    STATE.cohortsBySource
+      .map(c => c.source)
+      .filter(s => s && s !== "전체")
+      .map(s => topLevelOf(s))
   )].sort();
-  if (!sources.length) return;
+  if (!topLevels.length) return;
   const saved = STATE.source;
   sel.innerHTML = `<option value="all">전체 유입</option>` +
-    sources.map(s => `<option value="${s}">${s}</option>`).join("");
-  if (saved !== "all" && sources.includes(saved)) {
+    topLevels.map(s => `<option value="${s}">${s}</option>`).join("");
+  if (saved !== "all" && topLevels.includes(saved)) {
     sel.value = saved;
   } else {
     sel.value = "all";
@@ -2771,7 +2871,7 @@ function renderPurchaseTypeTrend() {
       const _cat = key; const _month = row.month;
       seg.addEventListener("click", function(e) {
         e.stopPropagation();
-        _showTrendPopup(_cat, _month);
+        _showTrendInline(_cat, _month, el);
       });
       seg.addEventListener("mouseenter", function() { this.style.opacity = ".7"; });
       seg.addEventListener("mouseleave", function() { this.style.opacity = "1"; });
@@ -2806,97 +2906,58 @@ function renderPurchaseTypeTrend() {
     legendWrap.appendChild(item);
   });
 
+  // 인라인 상세 패널 (세그먼트 클릭 시 차트 아래 표시)
+  const detailPanel = document.createElement("div");
+  detailPanel.id = "_trend-inline-panel";
+  detailPanel.style.cssText = "display:none;margin-top:14px;padding:14px 16px;border-radius:8px;background:var(--bg-2);border:1px solid var(--line-1)";
+
   el.appendChild(barsWrap);
   el.appendChild(legendWrap);
+  el.appendChild(detailPanel);
 }
 
-// ── 업체명 팝업 (내부 함수, 이벤트 위임으로만 호출) ──
-function _showTrendPopup(cat, month) {
+// ── 세그먼트 클릭 → 인라인 패널 표시 (차트 아래 빈 공간) ──
+function _showTrendInline(cat, month, chartEl) {
   const row = (STATE.trendData || []).find(r => r.month === month);
   if (!row || !row[cat]) return;
+
+  const panel = (chartEl || document).getElementById("_trend-inline-panel");
+  if (!panel) return;
 
   const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화" };
   const COLOR  = { new_:"#2563eb", retention:"#16a34a", reactivated:"#d97706" };
   const [yy, mm] = month.split("-");
-  const monthStr  = `${yy}년 ${parseInt(mm)}월`;
+  const monthStr = `${yy}년 ${parseInt(mm)}월`;
   const orgs = row[cat].orgs || [];
   const color = COLOR[cat] || "#888";
 
-  // 팝업 DOM 구성 (innerHTML 없이 직접 DOM 조작)
-  let overlay = document.getElementById("_trend-overlay");
-  if (!overlay) {
-    overlay = document.createElement("div");
-    overlay.id = "_trend-overlay";
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center";
-    overlay.addEventListener("click", function(e) {
-      if (e.target === overlay) _hideTrendPopup();
-    });
+  // 헤더
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <div>
+      <span style="font-size:11px;color:var(--fg-4)">${monthStr}</span>
+      <span style="display:block;font-size:13px;font-weight:700;color:${color}">${LABEL[cat]} <span style="color:var(--fg-3)">${orgs.length}건</span></span>
+    </div>
+    <button onclick="this.closest('#_trend-inline-panel').style.display='none'" style="border:none;background:none;cursor:pointer;font-size:18px;color:var(--fg-4);padding:0 4px">×</button>
+  </div>`;
 
-    const box = document.createElement("div");
-    box.id = "_trend-box";
-    box.style.cssText = "background:#fff;border-radius:12px;padding:24px;min-width:300px;max-width:420px;max-height:75vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)";
-    box.addEventListener("click", function(e) { e.stopPropagation(); });
-
-    const hdr = document.createElement("div");
-    hdr.id = "_trend-hdr";
-    hdr.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px";
-
-    const titleWrap = document.createElement("div");
-    const subEl = document.createElement("div");
-    subEl.id = "_trend-sub";
-    subEl.style.cssText = "font-size:13px;color:#888;margin-bottom:4px";
-    const titleEl = document.createElement("h3");
-    titleEl.id = "_trend-title";
-    titleEl.style.cssText = "margin:0;font-size:16px;font-weight:600";
-    titleWrap.appendChild(subEl);
-    titleWrap.appendChild(titleEl);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = "×";
-    closeBtn.style.cssText = "border:none;background:none;cursor:pointer;font-size:24px;color:#999;line-height:1;padding:0 4px;margin-left:12px;flex-shrink:0";
-    closeBtn.addEventListener("click", _hideTrendPopup);
-
-    hdr.appendChild(titleWrap);
-    hdr.appendChild(closeBtn);
-
-    const listEl = document.createElement("div");
-    listEl.id = "_trend-list";
-
-    box.appendChild(hdr);
-    box.appendChild(listEl);
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-  }
-
-  // 내용 업데이트
-  document.getElementById("_trend-sub").textContent = monthStr;
-  const titleEl = document.getElementById("_trend-title");
-  titleEl.textContent = `${LABEL[cat] || cat} ${orgs.length}건`;
-  titleEl.style.color = color;
-
-  const listEl = document.getElementById("_trend-list");
-  listEl.innerHTML = "";
   if (orgs.length) {
-    orgs.forEach((name, i) => {
-      const row2 = document.createElement("div");
-      row2.style.cssText = "padding:9px 0;border-bottom:1px solid #eee;font-size:14px;color:#222";
-      row2.textContent = `${i + 1}. ${name}`;
-      listEl.appendChild(row2);
-    });
+    // 태그 형태로 업체명 나열
+    html += `<div style="display:flex;flex-wrap:wrap;gap:6px">` +
+      orgs.map(name => `<span style="background:#fff;border:1px solid var(--line-2);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--fg-2)">${name}</span>`).join("") +
+      `</div>`;
   } else {
-    const empty = document.createElement("div");
-    empty.style.cssText = "padding:16px 0;color:#aaa;text-align:center;font-size:13px";
-    empty.textContent = "업체명 데이터 없음";
-    listEl.appendChild(empty);
+    html += `<div style="color:var(--fg-4);font-size:13px;text-align:center;padding:8px">업체명 데이터 없음</div>`;
   }
 
-  overlay.style.display = "flex";
+  panel.innerHTML = html;
+  panel.style.display = "block";
 }
 
-function _hideTrendPopup() {
-  const overlay = document.getElementById("_trend-overlay");
-  if (overlay) overlay.style.display = "none";
-}
+// ── (구) 팝업 함수 — 레거시 참조 방지용 스텁 ──
+function _showTrendPopup(cat, month) {}
+  const row = (STATE.trendData || []).find(r => r.month === month);
+  if (!row || !row[cat]) return;
+
 
 // 딜 목록에서 대시보드 지표 계산
 function computeFromDeals(deals, leads = []) {
