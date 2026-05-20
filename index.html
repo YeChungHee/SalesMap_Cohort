@@ -285,7 +285,15 @@ tbody tr:hover td{background:var(--primary-50)}
         <div class="card">
           <div class="card-header">
             <h3>딜 퍼널</h3>
-            <span class="pill pill-gray" id="funnel-period">통계 기간 6개월</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <select id="funnel-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
+                <option value="weekly">주간</option>
+                <option value="monthly" selected>월간</option>
+                <option value="quarterly">분기</option>
+                <option value="yearly">연간</option>
+              </select>
+              <select id="funnel-period-value" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px;min-width:90px"></select>
+            </div>
           </div>
           <div class="card-body" id="funnel-wrap" style="padding:16px 12px"></div>
         </div>
@@ -1050,8 +1058,11 @@ const STATE = {
   cycles:          [],
   velocity:        [],
   regressions:     [],
-  funnelData:      null,      // null = 미로드
-  pipelineMetrics: null,      // null = 미로드
+  funnelData:        null,      // null = 미로드
+  pipelineMetrics:   null,      // null = 미로드
+  rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
+  funnelPeriodType:  'monthly',
+  funnelPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
   dataLoaded:      false,
   dataLoading:     false,
   dataLoadedAt:    null,
@@ -1204,26 +1215,23 @@ function renderCohortTable() {
 
 // 깔때기
 function renderFunnel() {
+  populateFunnelPeriodOptions();
   if (!STATE.funnelData && !STATE.dataLoaded) {
-    const el = $("funnel-wrap") || $("funnel-chart");
-    if (el) el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    const el = $("funnel-wrap");
+    if (el) el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음 — API 새로고침을 눌러주세요"}</div>`;
     return;
   }
   const fd = STATE.funnelData || [];
-  const FUNNEL_STAGES = [
-    { stage:"거래 준비",      count: fd[0] ?? 0 },
-    { stage:"회원가입 완료",  count: fd[1] ?? 0 },
-    { stage:"신청서 작성 중", count: fd[2] ?? 0 },
-    { stage:"심사 중",        count: fd[3] ?? 0 },
-    { stage:"자료 보완 중",   count: fd[4] ?? 0 },
-    { stage:"실사/협의 중",   count: fd[5] ?? 0 },
-    { stage:"자금집행 완료",  count: fd[6] ?? 0 },
-    { stage:"결제 완료",      count: fd[7] ?? 0 }
-  ];
-  const top = FUNNEL_STAGES[0].count || 1;
+  const FUNNEL_STAGES = FUNNEL_STAGE_NAMES.map((stage, i) => ({ stage, count: fd[i] ?? 0 }));
+  const top = FUNNEL_STAGES[0].count || 0;
   const n   = FUNNEL_STAGES.length;
 
-  // 라이트 인디고 → 다크 인디고 색상 보간
+  if (top === 0) {
+    $("funnel-wrap").innerHTML = `<div style="text-align:center;padding:40px;color:var(--fg-4)">선택 기간에 데이터 없음</div>`;
+    return;
+  }
+
+  // 라이트 인디고 → 다크 인디고
   function lerpColor(t) {
     const r = Math.round(0xc7 + (0x31 - 0xc7) * t);
     const g = Math.round(0xd2 + (0x27 - 0xd2) * t);
@@ -1232,35 +1240,35 @@ function renderFunnel() {
   }
 
   const rows = FUNNEL_STAGES.map((s, i) => {
-    const cumPct  = (s.count / top * 100).toFixed(1);
-    const stepPct = i > 0 ? (s.count / FUNNEL_STAGES[i-1].count * 100).toFixed(1) : null;
-    const wi      = s.count / top * 100;
-    const wNext   = i < n-1 ? FUNNEL_STAGES[i+1].count / top * 100 : wi;
-    const cTop    = (100 - wi)    / 2;
-    const cBot    = (100 - wNext) / 2;
-    const color   = lerpColor(i / (n - 1));
-    const textColor = i >= 5 ? "#fff" : "#312e81";
-
-    const badge = stepPct
+    const cumPct  = (s.count / top * 100).toFixed(1) + "%";
+    const prevCount = FUNNEL_STAGES[i-1]?.count ?? 0;
+    // 단계 전환율: 이전 단계 건수가 0이면 "-" 표시
+    const stepPctVal = (i > 0 && prevCount > 0) ? (s.count / prevCount * 100).toFixed(1) : null;
+    const wi    = s.count / top * 100;
+    const wNext = i < n - 1 ? FUNNEL_STAGES[i + 1].count / top * 100 : wi;
+    const cTop  = (100 - wi)    / 2;
+    const cBot  = (100 - wNext) / 2;
+    const color = lerpColor(i / Math.max(n - 1, 1));
+    const badge = stepPctVal != null
       ? `<div style="position:absolute;left:50%;top:-11px;transform:translateX(-50%);
            background:#fff;border:1.5px solid #e0e7ff;border-radius:20px;
            padding:1px 10px;font-size:11px;font-weight:700;color:#3730a3;
-           white-space:nowrap;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.07)">${stepPct}%</div>`
+           white-space:nowrap;z-index:2;box-shadow:0 1px 3px rgba(0,0,0,.07)">${stepPctVal}%</div>`
       : "";
 
-    return `<div style="display:flex;align-items:stretch;height:42px;position:relative">
-      <div style="width:150px;flex-shrink:0;display:flex;flex-direction:column;
+    return `<div style="display:flex;align-items:stretch;height:44px;position:relative">
+      <div style="width:160px;flex-shrink:0;display:flex;flex-direction:column;
            justify-content:center;padding-right:14px;text-align:right;gap:1px">
         <span style="font-size:11px;color:var(--muted);line-height:1.3">${s.stage}</span>
         <span style="font-size:12px;line-height:1.4">
-          <span style="color:var(--muted);margin-right:4px">${fmt(s.count)}</span>
-          <strong style="color:var(--text)">${cumPct}%</strong>
+          <span style="color:var(--muted);margin-right:4px">${fmt(s.count)}건</span>
+          <strong style="color:var(--text)">${cumPct}</strong>
         </span>
       </div>
       <div style="flex:1;position:relative;overflow:visible">
         ${badge}
         <div style="width:100%;height:100%;background:${color};
-          clip-path:polygon(${cTop}% 0%,${100-cTop}% 0%,${100-cBot}% 100%,${cBot}% 100%)">
+          clip-path:polygon(${cTop.toFixed(2)}% 0%,${(100-cTop).toFixed(2)}% 0%,${(100-cBot).toFixed(2)}% 100%,${cBot.toFixed(2)}% 100%)">
         </div>
       </div>
     </div>`;
@@ -1963,6 +1971,21 @@ $("ctrl-period").addEventListener("change", e => { STATE.period = e.target.value
 $("ctrl-source").addEventListener("change", e => { STATE.source = e.target.value; renderAll(); });
 $("btn-refresh").addEventListener("click", () => { toast("데이터를 갱신합니다."); renderAll(); });
 
+// 퍼널 기간 선택기
+document.addEventListener("change", e => {
+  if (e.target.id === "funnel-period-type") {
+    STATE.funnelPeriodType = e.target.value;
+    STATE.funnelPeriodValue = ""; // 옵션 재생성 시 첫 항목 선택
+    populateFunnelPeriodOptions();
+    STATE.funnelData = computeFunnelData(STATE.rawDeals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
+    renderFunnel();
+  } else if (e.target.id === "funnel-period-value") {
+    STATE.funnelPeriodValue = e.target.value;
+    STATE.funnelData = computeFunnelData(STATE.rawDeals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
+    renderFunnel();
+  }
+});
+
 // Slack
 $("btn-slack").addEventListener("click", () => {
   document.querySelector('[data-view="sla"]').click();
@@ -2264,6 +2287,99 @@ function detectRegressions(deals, mapping) {
   return result;
 }
 
+// ── 퍼널 기간 범위 계산 ──
+function getFunnelDateRange(type, value) {
+  if (!value) return null;
+  let from, to;
+  if (type === 'weekly') {
+    const offset = parseInt(value) || 0;
+    const now = new Date();
+    const mon = new Date(now);
+    mon.setDate(now.getDate() - ((now.getDay() + 6) % 7) - offset * 7);
+    mon.setHours(0, 0, 0, 0);
+    to = new Date(mon); to.setDate(mon.getDate() + 6); to.setHours(23, 59, 59, 999);
+    from = mon;
+  } else if (type === 'monthly') {
+    const [y, m] = value.split('-').map(Number);
+    from = new Date(y, m - 1, 1);
+    to   = new Date(y, m, 0, 23, 59, 59, 999);
+  } else if (type === 'quarterly') {
+    const [y, q] = [parseInt(value), parseInt(value.split('Q')[1])];
+    const sm = (q - 1) * 3;
+    from = new Date(y, sm, 1);
+    to   = new Date(y, sm + 3, 0, 23, 59, 59, 999);
+  } else if (type === 'yearly') {
+    const y = parseInt(value);
+    from = new Date(y, 0, 1);
+    to   = new Date(y, 11, 31, 23, 59, 59, 999);
+  }
+  return { from, to };
+}
+
+// ── 기간별 퍼널 데이터 계산 (누적 도달 건수) ──
+const FUNNEL_STAGE_NAMES = ["거래 준비","회원가입 완료","신청서 작성 중","심사 중","자료 보완 중","실사/협의 중","자금집행 완료"];
+function computeFunnelData(deals, periodType, periodValue) {
+  let filtered = deals;
+  const range = getFunnelDateRange(periodType, periodValue);
+  if (range) {
+    const entryKey = "거래 준비(세일즈 파이프라인)로 진입한 날짜";
+    filtered = deals.filter(d => {
+      const v = d[entryKey];
+      if (!v) return false;
+      const t = new Date(v);
+      return t >= range.from && t <= range.to;
+    });
+  }
+  // 누적: 해당 단계에 한 번이라도 진입한 딜 수
+  const reached = {};
+  for (const deal of filtered) {
+    const dwells = parseStageDwells(deal, "세일즈 파이프라인");
+    for (const s of FUNNEL_STAGE_NAMES) {
+      if (dwells[s]?.enteredTs) reached[s] = (reached[s] || 0) + 1;
+    }
+  }
+  return FUNNEL_STAGE_NAMES.map(s => reached[s] || 0);
+}
+
+// ── 퍼널 기간 선택기 옵션 채우기 ──
+function populateFunnelPeriodOptions() {
+  const typeEl = $("funnel-period-type");
+  const valEl  = $("funnel-period-value");
+  if (!typeEl || !valEl) return;
+  const type = typeEl.value;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  let opts = [];
+  if (type === 'weekly') {
+    for (let i = 0; i < 8; i++) {
+      const d = new Date(now); d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - i * 7);
+      const label = i === 0 ? "이번 주" : i === 1 ? "지난 주" : `${i}주 전`;
+      opts.push({ v: String(i), l: label });
+    }
+  } else if (type === 'monthly') {
+    for (let i = 0; i < 12; i++) {
+      let mm = m - i; let yy = y;
+      if (mm <= 0) { mm += 12; yy--; }
+      opts.push({ v: `${yy}-${String(mm).padStart(2,'0')}`, l: `${yy}년 ${mm}월` });
+    }
+  } else if (type === 'quarterly') {
+    for (let i = 0; i < 6; i++) {
+      let q = Math.ceil(m / 3) - i; let yy = y;
+      while (q <= 0) { q += 4; yy--; }
+      opts.push({ v: `${yy}Q${q}`, l: `${yy}년 ${q}분기` });
+    }
+  } else if (type === 'yearly') {
+    for (let i = 0; i < 5; i++) opts.push({ v: String(y - i), l: `${y - i}년` });
+  }
+  const cur = STATE.funnelPeriodValue;
+  valEl.innerHTML = opts.map(o => `<option value="${o.v}" ${cur === o.v || (!opts.some(x=>x.v===cur) && opts[0].v===o.v) ? 'selected' : ''}>${o.l}</option>`).join('');
+  if (!opts.some(o => o.v === cur)) {
+    STATE.funnelPeriodValue = opts[0]?.v || '';
+    valEl.value = STATE.funnelPeriodValue;
+  }
+}
+
 // 딜 목록에서 대시보드 지표 계산
 function computeFromDeals(deals, leads = []) {
   const mapping = loadPipelineMapping();
@@ -2340,9 +2456,11 @@ function computeFromDeals(deals, leads = []) {
   // STATE 업데이트
   STATE.pipelineMetrics = { totalDeals, wonDeals, lostDeals, activeDeals, totalLeads: totalLeads || null, sqlLeads: sqlLeads || null, avgCycleP50 };
 
-  // 퍼널 데이터 (세일즈 파이프라인 단계 순서)
-  const funnelOrder = ["거래 준비","회원가입 완료","신청서 작성 중","심사 중","자료 보완 중","실사/협의 중","자금집행 완료","결제 완료"];
-  STATE.funnelData = funnelOrder.map(s => stageCounts[s] || 0);
+  // 원본 딜 저장 (기간 필터 재계산용)
+  STATE.rawDeals = deals;
+
+  // 퍼널 데이터 — 기간 필터 적용 후 계산
+  STATE.funnelData = computeFunnelData(deals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
 
   // 월별 코호트
   STATE.monthlyCohort = Object.entries(monthlyMap)
@@ -2355,6 +2473,14 @@ function computeFromDeals(deals, leads = []) {
       source, label: source, input: v.input, leads: v.input, deals: v.deals, paid: v.paid,
       new_: v.input, retention: 0, reactivated: 0
     }));
+  } else {
+    // 소스 필드 없을 때 — "전체" 단일 행으로 집계 표시
+    STATE.cohortsBySource = [{
+      source: "전체", label: "전체 (소스 미분류)",
+      input: totalDeals, leads: totalDeals,
+      deals: wonDeals, paid: deals.filter(d => detectCurrentStage(d, "세일즈 파이프라인") === "결제 완료").length,
+      new_: totalDeals, retention: 0, reactivated: 0
+    }];
   }
 
   // 영업 사이클 (파이프라인 전체)
