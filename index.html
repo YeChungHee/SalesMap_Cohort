@@ -1061,6 +1061,7 @@ const STATE = {
   funnelData:        null,      // null = 미로드
   pipelineMetrics:   null,      // null = 미로드
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
+  orgMap:            {},         // organizationId → { channel, detail } (유입경로 조인)
   funnelPeriodType:  'monthly',
   funnelPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
   dataLoaded:      false,
@@ -2194,6 +2195,20 @@ async function salesmapGetAllDeals(maxPages = 10) {
   return deals;
 }
 
+async function salesmapGetAllOrgs(maxPages = 20) {
+  const orgs = [];
+  let cursor = null;
+  for (let i = 0; i < maxPages; i++) {
+    const qs = cursor ? `?limit=100&cursor=${encodeURIComponent(cursor)}` : "?limit=100";
+    const data = await salesmapGet(`/v2/organization${qs}`);
+    const list = data?.data?.organizationList || data?.data?.list || data?.list || (Array.isArray(data) ? data : []);
+    orgs.push(...list);
+    cursor = data?.data?.nextCursor || data?.data?.nextCurosr || data?.nextCursor || null;
+    if (!cursor || !list.length) break;
+  }
+  return orgs;
+}
+
 async function salesmapGetAllLeads(maxPages = 10) {
   // Try /v2/lead first, fall back to deal with lead pipeline filter
   try {
@@ -2231,16 +2246,24 @@ function detectCurrentStage(deal, pipelineName) {
   return last;
 }
 
-// 딜 데이터에서 유입 소스 추출
+// 딜 데이터에서 유입 소스 추출 (Organization.유입경로 조인 우선)
 function detectDealSource(deal) {
+  // ① 설정된 커스텀 필드 우선
   const customField = STATE.settings.sourceField;
   if (customField) {
     const cv = deal[customField];
     if (cv) return String(cv).trim();
   }
+  // ② Organization 유입경로 조인 (회사 → 유입경로)
+  const orgId = deal.organizationId || deal["organizationId"] || deal["회사 ID"] || deal["회사id"];
+  if (orgId && STATE.orgMap[String(orgId)]) {
+    const { channel, detail } = STATE.orgMap[String(orgId)];
+    if (channel) return detail ? `${channel} · ${detail}` : channel;
+  }
+  // ③ 딜 자체 필드 폴백
   const raw = deal["소스"] || deal["유입경로"] || deal["source"] || deal["sourceType"] || deal["lead_source"] || deal["채널"] || "";
-  if (!raw) return null;
-  return String(raw).trim();
+  if (raw) return String(raw).trim();
+  return null;
 }
 
 // 단계 역행 감지
@@ -2508,7 +2531,23 @@ async function loadRealData() {
   STATE.dataLoading = true;
   renderKPI(); renderPipelineCards(); renderCohortTable(); renderFunnel();
   try {
-    const [deals, leads] = await Promise.all([salesmapGetAllDeals(20), salesmapGetAllLeads(10)]);
+    const [deals, leads, orgs] = await Promise.all([
+      salesmapGetAllDeals(20),
+      salesmapGetAllLeads(10),
+      salesmapGetAllOrgs(20).catch(() => [])
+    ]);
+    // 조직 유입경로 맵 빌드: organizationId → { channel, detail }
+    if (orgs.length) {
+      STATE.orgMap = {};
+      for (const org of orgs) {
+        const id = org.id || org.organizationId || org["id"];
+        if (!id) continue;
+        STATE.orgMap[String(id)] = {
+          channel: org["유입경로"]   || org["유입 경로"]   || "",
+          detail:  org["유입경로_상세"] || org["유입 경로 상세"] || ""
+        };
+      }
+    }
     if (deals.length) {
       computeFromDeals(deals, leads);
       fetchPipelineVelocityFromDeals(deals).catch(() => {});
