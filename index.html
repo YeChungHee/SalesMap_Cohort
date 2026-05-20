@@ -304,7 +304,18 @@ tbody tr:hover td{background:var(--primary-50)}
           <div class="card-body np" id="freshness-list"></div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>고객 유형 분포</h3><span class="pill pill-gray">이번 기간</span></div>
+          <div class="card-header">
+            <h3>구매 유형 분포</h3>
+            <div style="display:flex;gap:6px;align-items:center">
+              <select id="cust-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
+                <option value="weekly">주간</option>
+                <option value="monthly" selected>월간</option>
+                <option value="quarterly">분기</option>
+                <option value="yearly">연간</option>
+              </select>
+              <select id="cust-period-value" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px;min-width:90px"></select>
+            </div>
+          </div>
           <div class="card-body" id="customer-type-chart"></div>
         </div>
       </div>
@@ -1064,6 +1075,8 @@ const STATE = {
   orgMap:            {},         // organizationId → { channel, detail } (유입경로 조인)
   funnelPeriodType:  'monthly',
   funnelPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
+  custPeriodType:   'monthly',
+  custPeriodValue:  (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
   dataLoaded:      false,
   dataLoading:     false,
   dataLoadedAt:    null,
@@ -1302,25 +1315,32 @@ function renderFreshness() {
   }).join("");
 }
 
-// 고객 유형
+// 구매 유형 분포
 function renderCustomerType() {
-  const t = cohortTotals();
-  if (!t.input && !STATE.dataLoaded) {
+  populateCustPeriodOptions();
+  if (!STATE.dataLoaded) {
     $("customer-type-chart").innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
     return;
   }
-  const total = t.new_ + t.retention + t.reactivated || 1;
+  const t = computeCustomerTypeData(STATE.rawDeals, STATE.custPeriodType, STATE.custPeriodValue);
+  const total = (t.new_ + t.retention + t.reactivated) || 1;
   const items = [
-    { label:"신규",    value:t.new_,        color:var_("--blue"),   pct: (t.new_/total*100).toFixed(0) },
-    { label:"리텐션",  value:t.retention,   color:var_("--green"),  pct: (t.retention/total*100).toFixed(0) },
-    { label:"재활성화", value:t.reactivated, color:var_("--orange"), pct: (t.reactivated/total*100).toFixed(0) }
+    { label:"신규",    value:t.new_,        color:var_("--blue"),   pct: Math.round(t.new_/total*100) },
+    { label:"리텐션",  value:t.retention,   color:var_("--green"),  pct: Math.round(t.retention/total*100) },
+    { label:"재활성화", value:t.reactivated, color:var_("--orange"), pct: Math.round(t.reactivated/total*100) }
   ];
+  const hasData = t.new_ + t.retention + t.reactivated > 0;
+  if (!hasData) {
+    $("customer-type-chart").innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">선택 기간 내 결제 완료 데이터 없음</div>`;
+    return;
+  }
   $("customer-type-chart").innerHTML = items.map(it => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div style="width:10px;height:10px;border-radius:50%;background:${it.color};flex-shrink:0"></div>
       <div style="flex:1">
-        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
-          <span>${it.label}</span><span style="font-weight:700">${fmt(it.value)} (${it.pct}%)</span>
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+          <span style="font-weight:600">${it.label}</span>
+          <span style="font-weight:700;color:var(--fg-1)">${it.value}건 (${it.pct}%)</span>
         </div>
         <div class="bar"><div class="bar-fill" style="width:${it.pct}%;background:${it.color}"></div></div>
       </div>
@@ -1984,6 +2004,13 @@ document.addEventListener("change", e => {
     STATE.funnelPeriodValue = e.target.value;
     STATE.funnelData = computeFunnelData(STATE.rawDeals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
     renderFunnel();
+  } else if (e.target.id === "cust-period-type") {
+    STATE.custPeriodType = e.target.value;
+    STATE.custPeriodValue = "";
+    renderCustomerType();
+  } else if (e.target.id === "cust-period-value") {
+    STATE.custPeriodValue = e.target.value;
+    renderCustomerType();
   }
 });
 
@@ -2401,6 +2428,102 @@ function populateFunnelPeriodOptions() {
     STATE.funnelPeriodValue = opts[0]?.v || '';
     valEl.value = STATE.funnelPeriodValue;
   }
+}
+
+// ── 구매 유형 분포 기간 선택기 옵션 채우기 ──
+function populateCustPeriodOptions() {
+  const typeEl = $("cust-period-type");
+  const valEl  = $("cust-period-value");
+  if (!typeEl || !valEl) return;
+  const type = typeEl.value;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  let opts = [];
+  if (type === 'weekly') {
+    for (let i = 0; i < 8; i++) {
+      const label = i === 0 ? "이번 주" : i === 1 ? "지난 주" : `${i}주 전`;
+      opts.push({ v: String(i), l: label });
+    }
+  } else if (type === 'monthly') {
+    for (let i = 0; i < 12; i++) {
+      let mm = m - i; let yy = y;
+      if (mm <= 0) { mm += 12; yy--; }
+      opts.push({ v: `${yy}-${String(mm).padStart(2,'0')}`, l: `${yy}년 ${mm}월` });
+    }
+  } else if (type === 'quarterly') {
+    for (let i = 0; i < 6; i++) {
+      let q = Math.ceil(m / 3) - i; let yy = y;
+      while (q <= 0) { q += 4; yy--; }
+      opts.push({ v: `${yy}Q${q}`, l: `${yy}년 ${q}분기` });
+    }
+  } else if (type === 'yearly') {
+    for (let i = 0; i < 5; i++) opts.push({ v: String(y - i), l: `${y - i}년` });
+  }
+  const cur = STATE.custPeriodValue;
+  valEl.innerHTML = opts.map(o => `<option value="${o.v}" ${cur === o.v || (!opts.some(x=>x.v===cur) && opts[0].v===o.v) ? 'selected' : ''}>${o.l}</option>`).join('');
+  if (!opts.some(o => o.v === cur)) {
+    STATE.custPeriodValue = opts[0]?.v || '';
+    valEl.value = STATE.custPeriodValue;
+  }
+}
+
+// ── 구매 유형 분포 계산 (신규/리텐션/재활성화) ──
+// 기준: 선택 기간 내 결제 완료 딜을 organizationId 기준으로 분류
+//  - 신규: 해당 조직의 첫 번째 결제 완료
+//  - 리텐션: 직전 결제 완료 후 6개월 이내 재결제
+//  - 재활성화: 직전 결제 완료 후 6개월 초과 후 재결제
+function computeCustomerTypeData(allDeals, periodType, periodValue) {
+  // 결제 완료 딜만 추출 후 시간순 정렬
+  const wonDeals = allDeals
+    .map(d => {
+      const dwells = parseStageDwells(d, "세일즈 파이프라인");
+      const enteredTs = dwells["결제 완료"]?.enteredTs || null;
+      return { orgId: String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown"), enteredTs };
+    })
+    .filter(d => d.enteredTs)
+    .sort((a, b) => a.enteredTs - b.enteredTs);
+
+  // 기간 필터 범위 계산
+  const range = getFunnelDateRange(periodType, periodValue);
+
+  // 조직별 첫 결제 완료 날짜 맵 (전체 기간 기준)
+  const orgFirstPayment = {};
+  const orgLastPayment  = {};
+  for (const d of wonDeals) {
+    if (!orgFirstPayment[d.orgId]) orgFirstPayment[d.orgId] = d.enteredTs;
+    orgLastPayment[d.orgId] = d.enteredTs; // 기간 내 현재 deal 직전 결제
+  }
+
+  // 기간 내 결제 완료 딜 분류
+  let newCount = 0, retentionCount = 0, reactivatedCount = 0;
+  const orgSeenInPeriod = new Set();
+
+  for (const d of wonDeals) {
+    if (range) {
+      const t = new Date(d.enteredTs);
+      if (t < range.from || t > range.to) continue;
+    }
+    // 같은 조직이 기간 내 여러 건이면 첫 건만 카운트
+    if (orgSeenInPeriod.has(d.orgId)) continue;
+    orgSeenInPeriod.add(d.orgId);
+
+    // 기간 내 이 딜 이전에 결제 완료 이력이 있는지 확인
+    const prevDeals = wonDeals.filter(x => x.orgId === d.orgId && x.enteredTs < d.enteredTs);
+    if (prevDeals.length === 0) {
+      newCount++;
+    } else {
+      const latestPrev = prevDeals[prevDeals.length - 1];
+      const monthsGap = (d.enteredTs - latestPrev.enteredTs) / (1000 * 60 * 60 * 24 * 30);
+      if (monthsGap <= 6) {
+        retentionCount++;
+      } else {
+        reactivatedCount++;
+      }
+    }
+  }
+
+  return { new_: newCount, retention: retentionCount, reactivated: reactivatedCount };
 }
 
 // 딜 목록에서 대시보드 지표 계산
