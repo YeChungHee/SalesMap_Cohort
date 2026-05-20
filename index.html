@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.3.7</title>
+<title>세일즈맵 코호트 대시보드 v2.3.8</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -647,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.7</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.8</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -663,6 +663,14 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.8",
+    date: "2026-05-21",
+    label: "세그먼트 클릭 TypeError 버그 수정",
+    items: [
+      { type:"fix", text:"_showTrendInline — chartEl.getElementById() 오류 수정: DOM 엘리먼트는 getElementById 미지원, document.getElementById로 교체" }
+    ]
+  },
   {
     version: "2.3.7",
     date: "2026-05-20",
@@ -2871,7 +2879,7 @@ function renderPurchaseTypeTrend() {
       const _cat = key; const _month = row.month;
       seg.addEventListener("click", function(e) {
         e.stopPropagation();
-        _showTrendInline(_cat, _month, el);
+        _showTrendInline(_cat, _month);
       });
       seg.addEventListener("mouseenter", function() { this.style.opacity = ".7"; });
       seg.addEventListener("mouseleave", function() { this.style.opacity = "1"; });
@@ -2917,11 +2925,11 @@ function renderPurchaseTypeTrend() {
 }
 
 // ── 세그먼트 클릭 → 인라인 패널 표시 (차트 아래 빈 공간) ──
-function _showTrendInline(cat, month, chartEl) {
+function _showTrendInline(cat, month) {
   const row = (STATE.trendData || []).find(r => r.month === month);
   if (!row || !row[cat]) return;
 
-  const panel = (chartEl || document).getElementById("_trend-inline-panel");
+  const panel = document.getElementById("_trend-inline-panel");
   if (!panel) return;
 
   const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화" };
