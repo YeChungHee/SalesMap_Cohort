@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.3.0</title>
+<title>세일즈맵 코호트 대시보드 v2.3.1</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -640,7 +640,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.0</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.1</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -656,6 +656,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.1",
+    date: "2026-05-20",
+    label: "구매 유형 분포 개선",
+    items: [
+      { type:"feat", text:"카드명 '고객 유형 분포' → '구매 유형 분포'로 변경" },
+      { type:"feat", text:"기간 선택기 추가 — 주간·월간·분기·연간 선택 지원" },
+      { type:"feat", text:"실데이터 분류 로직 — 결제 완료 딜을 조직 단위로 신규·리텐션·재활성화 자동 분류" },
+      { type:"feat", text:"그래프 포맷 변경 — 'N건 (X%)' 형식으로 수치와 퍼센트 동시 표시" }
+    ]
+  },
   {
     version: "2.3.0",
     date: "2026-05-20",
