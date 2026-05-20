@@ -2395,8 +2395,11 @@ const PIPELINE_STAGE_DEFAULTS = [
   { pipe:"세일즈", stage:"심사 중",        label:"심사 중",        cat:"진행", threshH:240, include:true  },
   { pipe:"세일즈", stage:"자료 보완 중",   label:"자료 보완 중",   cat:"진행", threshH:72,  include:true  },
   { pipe:"세일즈", stage:"실사/협의 중",   label:"실사/협의 중",   cat:"진행", threshH:72,  include:true  },
+  // ── 1차 종료: 성사 ──
   { pipe:"세일즈", stage:"결제 완료",      label:"결제 완료",      cat:"성사", threshH:0,   include:true  },
-  { pipe:"세일즈", stage:"결제 지연",      label:"결제 지연",      cat:"실패", threshH:0,   include:false },
+  // ── 채권추심: 결제 완료로 전환 가능 (비터미널) ──
+  { pipe:"세일즈", stage:"결제 지연",      label:"결제 지연",      cat:"채권", threshH:0,   include:true  },
+  // ── 1차 종료: 실패 (터미널) ──
   { pipe:"세일즈", stage:"진행 거절",      label:"진행 거절",      cat:"실패", threshH:0,   include:false },
   { pipe:"세일즈", stage:"신청 취소",      label:"신청 취소",      cat:"실패", threshH:0,   include:false },
   { pipe:"세일즈", stage:"보류 서류/계약", label:"보류 서류/계약", cat:"실패", threshH:0,   include:false },
@@ -2412,8 +2415,8 @@ const PIPELINE_STAGE_DEFAULTS = [
   { pipe:"리드", stage:"영업 대상 확정", label:"영업 대상 확정", cat:"종료", threshH:0,   include:true  },
   { pipe:"리드", stage:"영업 대상 보류", label:"영업 대상 보류", cat:"종료", threshH:0,   include:false }
 ];
-const CAT_OPTIONS = ["진행","성사","실패","종료"];
-const CAT_COLOR   = { 진행:"blue", 성사:"green", 실패:"red", 종료:"gray" };
+const CAT_OPTIONS = ["진행","성사","채권","실패","종료"];
+const CAT_COLOR   = { 진행:"blue", 성사:"green", 채권:"orange", 실패:"red", 종료:"gray" };
 
 function loadPipelineMapping() {
   try {
