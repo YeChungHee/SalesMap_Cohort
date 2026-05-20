@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.2.0</title>
+<title>세일즈맵 코호트 대시보드 v2.3.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -621,7 +621,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v1.3.0</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.0</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -637,6 +637,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.0",
+    date: "2026-05-20",
+    label: "파이프라인 재정의 + 역행 탐지 정확도 개선",
+    items: [
+      { type:"fix",  text:"역행 탐지 오탐 수정 — 4개 터미널 단계(결제 완료·진행 거절·신청 취소·보류 서류/계약) 진입 딜 자동 제외" },
+      { type:"feat", text:"체류 시간 N일 N시간 포맷 — velocity 테이블·히트맵 표시 형식 변경" },
+      { type:"fix",  text:"파이프라인 6개 진행 단계만 적용 — 자금집행 완료 제거, 결제 완료를 단일 성사 터미널로 통합" },
+      { type:"feat", text:"결제 지연 채권 카테고리 분리 — 실패와 구분, 체류시간 추적 활성화, 결제 완료로 전환 가능" }
+    ]
+  },
   {
     version: "2.2.0",
     date: "2026-05-18",
