@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.3.3</title>
+<title>세일즈맵 코호트 대시보드 v2.3.5</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -647,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.3</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.5</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -663,6 +663,26 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.5",
+    date: "2026-05-20",
+    label: "4가지 이슈 일괄 수정",
+    items: [
+      { type:"fix",  text:"구매 유형 추이 바 차트 비율 — sqrt 스케일 적용으로 1건·6건 시각적 비율 차이 명확화" },
+      { type:"fix",  text:"유입 파이프라인 필터 — 하드코딩 영문 값 제거, 실데이터 로딩 후 실제 유입경로 값으로 드롭다운 동적 생성" },
+      { type:"feat", text:"역할별 접근 제어 — renderRoleBadge() 구현: 역할 뱃지 표시, 투자자/읽기전용 갱신 버튼 비활성화, 투자자 민감 탭 숨김" },
+      { type:"fix",  text:"월별 코호트 데이터 생성 — '거래 준비' 날짜 없는 딜도 createdAt 폴백으로 집계 포함, YYYY-MM 유효성 검사 추가" }
+    ]
+  },
+  {
+    version: "2.3.4",
+    date: "2026-05-20",
+    label: "월별 추이 팝업 이벤트 위임 방식 재작성",
+    items: [
+      { type:"fix", text:"inline onclick 제거 — data-trend-cat/data-trend-month 속성 + 컨테이너 이벤트 위임으로 팝업 클릭 반응 해소" },
+      { type:"fix", text:"팝업 DOM 순수 createElement 생성 — innerHTML 방식 제거, addEventListener로 닫기 바인딩" }
+    ]
+  },
   {
     version: "2.3.3",
     date: "2026-05-20",
@@ -1971,8 +1991,74 @@ function renderSettingsView() {
   if ($("inp-source-field")) $("inp-source-field").value = s.sourceField || "";
 }
 
-// RBAC 뱃지
-function renderRoleBadge() {}
+// ── 유입 소스 필터 동적 생성 ──
+// 실데이터 로딩 후 cohortsBySource 소스값으로 드롭다운 갱신
+function repopulateSourceFilter() {
+  const sel = document.getElementById("ctrl-source");
+  if (!sel) return;
+  const sources = [...new Set(
+    STATE.cohortsBySource.map(c => c.source).filter(s => s && s !== "전체")
+  )].sort();
+  if (!sources.length) return;
+  const saved = STATE.source;
+  sel.innerHTML = `<option value="all">전체 유입</option>` +
+    sources.map(s => `<option value="${s}">${s}</option>`).join("");
+  if (saved !== "all" && sources.includes(saved)) {
+    sel.value = saved;
+  } else {
+    sel.value = "all";
+    STATE.source = "all";
+  }
+}
+
+// ── RBAC 뱃지 & 역할별 UI 제어 ──
+// 역할별 접근 범위:
+//   admin      — 전체 탭 + 갱신 가능 + 회사명 공개
+//   operations — admin과 동일
+//   investor   — 개요·코호트·보고서 탭만 / 회사명 마스킹 / 갱신 불가
+//   read_only  — 설정 탭 숨김 / 갱신 불가
+function renderRoleBadge() {
+  const role = STATE.role;
+  const ROLE_CFG = {
+    admin:      { label:"관리자",  emoji:"👑", cls:"role-admin",      navHide:[], refreshOff:false },
+    operations: { label:"운영",    emoji:"⚙️", cls:"role-operations", navHide:[], refreshOff:false },
+    investor:   { label:"투자자",  emoji:"📈", cls:"role-investor",   navHide:["pipeline","quality","ledger","settings"], refreshOff:true  },
+    read_only:  { label:"읽기전용",emoji:"👁", cls:"role-read_only",  navHide:["settings"],          refreshOff:true  }
+  };
+  const cfg = ROLE_CFG[role] || ROLE_CFG.operations;
+
+  // 뱃지 렌더링
+  let badge = document.getElementById("_role-badge");
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.id = "_role-badge";
+    badge.className = "role-badge";
+    const ctrl = document.querySelector(".topbar-controls");
+    if (ctrl) ctrl.insertAdjacentElement("afterbegin", badge);
+  }
+  badge.className = `role-badge ${cfg.cls}`;
+  badge.textContent = `${cfg.emoji} ${cfg.label}`;
+
+  // 갱신 버튼 활성/비활성
+  const refreshBtn = $("btn-refresh");
+  if (refreshBtn) {
+    refreshBtn.disabled = cfg.refreshOff;
+    refreshBtn.style.opacity = cfg.refreshOff ? "0.35" : "";
+    refreshBtn.style.cursor  = cfg.refreshOff ? "not-allowed" : "";
+    refreshBtn.title = cfg.refreshOff ? "이 역할은 데이터 갱신이 제한됩니다" : "데이터 새로고침";
+  }
+
+  // 탭 가시성
+  document.querySelectorAll(".nav-btn[data-view]").forEach(btn => {
+    const view = btn.getAttribute("data-view");
+    btn.style.display = cfg.navHide.includes(view) ? "none" : "";
+    // 숨겨진 탭이 현재 선택된 경우 개요로 전환
+    if (cfg.navHide.includes(view) && btn.classList.contains("active")) {
+      const overviewBtn = document.querySelector('[data-view="overview"]');
+      if (overviewBtn) overviewBtn.click();
+    }
+  });
+}
 
 // ══════════════════════════════════════════════
 //  전체 렌더
@@ -2656,11 +2742,12 @@ function renderPurchaseTypeTrend() {
     return mm === "01" ? `1월('${yy.slice(2)})` : `${parseInt(mm)}월`;
   };
 
+  const sqrtMax = Math.sqrt(maxTotal);
   const bars = STATE.trendData.map(row => {
     const total = row.new_.count + row.retention.count + row.reactivated.count;
     const segs = CATS.map(({ key, label, color }) => {
       if (!row[key].count) return "";
-      const h = Math.max(Math.round((row[key].count / maxTotal) * BAR_MAX_H), 2);
+      const h = sqrtMax > 0 ? Math.max(Math.round((Math.sqrt(row[key].count) / sqrtMax) * BAR_MAX_H), 5) : 5;
       // data-* 속성으로 클릭 데이터 전달 — inline onclick 사용 안 함
       return `<div data-trend-cat="${key}" data-trend-month="${row.month}"
                    style="height:${h}px;background:${color};cursor:pointer;transition:opacity .15s;flex-shrink:0"
@@ -2825,15 +2912,17 @@ function computeFromDeals(deals, leads = []) {
       if (cur && cur === "결제 완료")      sourceMap[src].paid++;
     }
 
-    // 월별 집계 — 거래 준비 진입 날짜 기준
+    // 월별 집계 — 거래 준비 진입 날짜 기준 (없으면 createdAt 폴백)
     const entryKey = `거래 준비(세일즈 파이프라인)로 진입한 날짜`;
-    const entryRaw = deal[entryKey];
+    const entryRaw = deal[entryKey] || deal["createdAt"] || deal["created_at"] || deal["생성일"] || deal["생성 일"] || null;
     if (entryRaw) {
       const month = String(entryRaw).slice(0, 7);
-      if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0 };
-      monthlyMap[month].input++;
-      if (cur && wonStages.includes(cur)) monthlyMap[month].deals++;
-      if (cur && cur === "결제 완료")     monthlyMap[month].paid++;
+      if (/^\d{4}-\d{2}/.test(month)) {  // YYYY-MM 형식 유효성 검사
+        if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0 };
+        monthlyMap[month].input++;
+        if (cur && wonStages.includes(cur)) monthlyMap[month].deals++;
+        if (cur && cur === "결제 완료")     monthlyMap[month].paid++;
+      }
     }
 
     // 성사 딜 영업 사이클 (누적 체류 합산)
@@ -2944,6 +3033,7 @@ async function loadRealData() {
     }
     if (deals.length) {
       computeFromDeals(deals, leads);
+      repopulateSourceFilter();   // 실제 유입경로 값으로 드롭다운 갱신
       fetchPipelineVelocityFromDeals(deals).catch(() => {});
     }
   } catch(e) {
