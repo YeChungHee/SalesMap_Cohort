@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.3.2</title>
+<title>세일즈맵 코호트 대시보드 v2.3.3</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -337,6 +337,13 @@ tbody tr:hover td{background:var(--primary-50)}
           <div class="card-body" id="retention-chart"></div>
         </div>
       </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <h3>월별 구매 유형 추이</h3>
+          <span class="pill pill-blue">최근 12개월 · 세그먼트 클릭 시 업체 확인</span>
+        </div>
+        <div class="card-body" id="purchase-type-trend-chart" style="padding:16px"></div>
+      </div>
     </div>
 
     <!-- ══════ 파이프라인 ══════ -->
@@ -640,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.2</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.3</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -656,6 +663,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.3",
+    date: "2026-05-20",
+    label: "구매 유형 폴백 보완 + 월별 추이 차트 (업체명 팝업)",
+    items: [
+      { type:"fix",  text:"구매 유형 분포 폴백 — 자금집행 완료 enteredTs 없는 딜에 거래일 → 결제 완료 enteredTs 순 폴백 추가" },
+      { type:"feat", text:"월별 구매 유형 추이 카드 — 코호트 분석 탭에 최근 12개월 신규/리텐션/재활성화 스택 바 차트 추가" },
+      { type:"feat", text:"세그먼트 클릭 팝업 — 바 세그먼트 클릭 시 해당 월·유형의 업체명 목록 팝업 표시" }
+    ]
+  },
   {
     version: "2.3.2",
     date: "2026-05-20",
@@ -1093,7 +1110,8 @@ const STATE = {
   funnelData:        null,      // null = 미로드
   pipelineMetrics:   null,      // null = 미로드
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
-  orgMap:            {},         // organizationId → { channel, detail } (유입경로 조인)
+  orgMap:            {},         // organizationId → { channel, detail, name } (유입경로 + 업체명 조인)
+  trendData:         [],         // 월별 구매 유형 추이 (computeMonthlyPurchaseTypeTrend 결과)
   funnelPeriodType:  'monthly',
   funnelPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
   custPeriodType:   'monthly',
@@ -1969,6 +1987,7 @@ function renderAll() {
   renderHeatmap();
   renderCycles();
   renderRetention();
+  renderPurchaseTypeTrend();
   renderPipelineCards();
   renderVelocity();
   renderDwellHeatmap();
@@ -2495,11 +2514,15 @@ function populateCustPeriodOptions() {
 //  - 구매이력 = "Repeat" + 직전 자금집행 완료 ≤ 6개월 → 리텐션
 //  - 구매이력 = "Repeat" + 직전 자금집행 완료 > 6개월  → 재활성화
 function computeCustomerTypeData(allDeals, periodType, periodValue) {
-  // 자금집행 완료 딜만 추출 후 시간순 정렬
+  // 자금집행 완료 딜 추출 — 없으면 거래일 → 결제 완료 순 폴백
   const wonDeals = allDeals
     .map(d => {
       const dwells = parseStageDwells(d, "세일즈 파이프라인");
-      const enteredTs = dwells["자금집행 완료"]?.enteredTs || null;
+      const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
+      const fb1Raw    = d["거래일"];
+      const fb1       = fb1Raw ? new Date(fb1Raw).getTime() : null;
+      const fb2       = dwells["결제 완료"]?.enteredTs || null;
+      const enteredTs = primaryTs || (fb1 && !isNaN(fb1) ? fb1 : null) || fb2 || null;
       const purchaseType = d["구매이력"] || null; // "New" | "Repeat" | null
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       return { orgId, enteredTs, purchaseType };
@@ -2547,6 +2570,163 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
   }
 
   return { new_: newCount, retention: retentionCount, reactivated: reactivatedCount };
+}
+
+// ── 월별 구매 유형 추이 계산 ──
+// 반환: [{ month:"2026-04", new_:{count,orgs:[]}, retention:{count,orgs:[]}, reactivated:{count,orgs:[]} }]
+function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
+  const wonDeals = allDeals
+    .map(d => {
+      const dwells    = parseStageDwells(d, "세일즈 파이프라인");
+      const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
+      const fb1Raw    = d["거래일"];
+      const fb1       = fb1Raw ? new Date(fb1Raw).getTime() : null;
+      const fb2       = dwells["결제 완료"]?.enteredTs || null;
+      const enteredTs = primaryTs || (fb1 && !isNaN(fb1) ? fb1 : null) || fb2 || null;
+      const purchaseType = d["구매이력"] || null;
+      const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
+      const orgName = STATE.orgMap[orgId]?.name || d["회사"] || d["organizationName"] || d["이름"] || orgId;
+      return { orgId, orgName, enteredTs, purchaseType };
+    })
+    .filter(d => d.enteredTs)
+    .sort((a, b) => a.enteredTs - b.enteredTs);
+
+  // 최근 N개월 목록 생성 (오래된 순 → 최신 순)
+  const now = new Date();
+  const result = [];
+  for (let i = months - 1; i >= 0; i--) {
+    let mm = now.getMonth() + 1 - i;
+    let yy = now.getFullYear();
+    while (mm <= 0) { mm += 12; yy--; }
+    const monthStr = `${yy}-${String(mm).padStart(2,'0')}`;
+    result.push({ month: monthStr, new_: { count:0, orgs:[] }, retention: { count:0, orgs:[] }, reactivated: { count:0, orgs:[] } });
+  }
+
+  for (const row of result) {
+    const range = getFunnelDateRange('monthly', row.month);
+    if (!range) continue;
+    const orgSeenInPeriod = new Set();
+
+    for (const d of wonDeals) {
+      const t = new Date(d.enteredTs);
+      if (t < range.from || t > range.to) continue;
+      if (orgSeenInPeriod.has(d.orgId)) continue;
+      orgSeenInPeriod.add(d.orgId);
+
+      let cat;
+      if (d.purchaseType === "New") {
+        cat = "new_";
+      } else if (d.purchaseType === "Repeat") {
+        const prevDeals = wonDeals.filter(x => x.orgId === d.orgId && x.enteredTs < d.enteredTs);
+        if (!prevDeals.length) {
+          cat = "new_";
+        } else {
+          const gap = (d.enteredTs - prevDeals[prevDeals.length - 1].enteredTs) / (1000 * 60 * 60 * 24 * 30);
+          cat = gap <= 6 ? "retention" : "reactivated";
+        }
+      } else {
+        cat = "new_";
+      }
+      row[cat].count++;
+      row[cat].orgs.push(d.orgName);
+    }
+  }
+  return result;
+}
+
+// ── 월별 구매 유형 추이 렌더 ──
+function renderPurchaseTypeTrend() {
+  const el = $("purchase-type-trend-chart");
+  if (!el) return;
+  if (!STATE.dataLoaded) {
+    el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    return;
+  }
+  STATE.trendData = computeMonthlyPurchaseTypeTrend(STATE.rawDeals);
+  const maxTotal = Math.max(...STATE.trendData.map(r => r.new_.count + r.retention.count + r.reactivated.count), 1);
+  const BAR_MAX_H = 120;
+  const CATS = [
+    { key:"new_",        label:"신규",    color:"#2563eb" },
+    { key:"retention",   label:"리텐션",  color:"#16a34a" },
+    { key:"reactivated", label:"재활성화", color:"#d97706" }
+  ];
+
+  const monthLabel = m => {
+    const [yy, mm] = m.split("-");
+    return mm === "01" ? `1월('${yy.slice(2)})` : `${parseInt(mm)}월`;
+  };
+
+  const bars = STATE.trendData.map(row => {
+    const total = row.new_.count + row.retention.count + row.reactivated.count;
+    const segs = CATS.map(({ key, label, color }) => {
+      if (!row[key].count) return "";
+      const h = Math.max(Math.round((row[key].count / maxTotal) * BAR_MAX_H), 2);
+      return `<div onclick="showPurchaseTrendPopup('${key}','${row.month}')"
+                   style="height:${h}px;background:${color};cursor:pointer;transition:opacity .15s"
+                   onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"
+                   title="${label} ${row[key].count}건 (클릭해서 업체 확인)"></div>`;
+    }).join("");
+    return `
+      <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;gap:2px">
+        <div style="display:flex;flex-direction:column-reverse;width:100%;border-radius:3px 3px 0 0;overflow:hidden;height:${BAR_MAX_H}px;align-self:stretch;background:${total===0?'var(--line,#f0f0f0)':'none'}">
+          ${segs}
+        </div>
+        <div style="font-size:10px;color:var(--fg-4);text-align:center;white-space:nowrap">${monthLabel(row.month)}</div>
+        ${total > 0 ? `<div style="font-size:10px;color:var(--fg-3);font-weight:600">${total}</div>` : ""}
+      </div>`;
+  }).join("");
+
+  const legend = CATS.map(({ color, label }) =>
+    `<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg-2)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${color}"></div>${label}
+    </div>`
+  ).join("");
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:flex-end;gap:4px;padding:8px 0 0">${bars}</div>
+    <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">${legend}</div>`;
+}
+
+// ── 팝업: 월별 구매 유형 업체명 ──
+function showPurchaseTrendPopup(cat, month) {
+  const row = STATE.trendData.find(r => r.month === month);
+  if (!row) return;
+  const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화" };
+  const [yy, mm] = month.split("-");
+  const monthStr = `${yy}년 ${parseInt(mm)}월`;
+  const orgs = row[cat].orgs;
+
+  let popup = document.getElementById("purchase-trend-popup");
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "purchase-trend-popup";
+    popup.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center";
+    popup.onclick = e => { if (e.target === popup) hidePurchaseTrendPopup(); };
+    document.body.appendChild(popup);
+  }
+
+  const color = { new_:"#2563eb", retention:"#16a34a", reactivated:"#d97706" }[cat];
+  const items = orgs.length
+    ? orgs.map((n,i) => `<div style="padding:8px 0;border-bottom:1px solid var(--line,#eee);font-size:14px;color:var(--fg-1)">${i+1}. ${n}</div>`).join("")
+    : `<div style="padding:16px 0;color:var(--fg-4);text-align:center;font-size:13px">업체명 데이터 없음</div>`;
+
+  popup.innerHTML = `
+    <div onclick="event.stopPropagation()" style="background:var(--surface,#fff);border-radius:12px;padding:24px;min-width:300px;max-width:420px;max-height:75vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:14px;color:var(--fg-4);margin-bottom:2px">${monthStr}</div>
+          <h3 style="margin:0;font-size:16px;font-weight:600;color:${color}">${LABEL[cat]} ${orgs.length}건</h3>
+        </div>
+        <button onclick="hidePurchaseTrendPopup()" style="border:none;background:none;cursor:pointer;font-size:22px;color:var(--fg-3);line-height:1;padding:0 4px">×</button>
+      </div>
+      <div>${items}</div>
+    </div>`;
+  popup.style.display = "flex";
+}
+
+function hidePurchaseTrendPopup() {
+  const popup = document.getElementById("purchase-trend-popup");
+  if (popup) popup.style.display = "none";
 }
 
 // 딜 목록에서 대시보드 지표 계산
@@ -2690,7 +2870,8 @@ async function loadRealData() {
         if (!id) continue;
         STATE.orgMap[String(id)] = {
           channel: org["유입경로"]   || org["유입 경로"]   || "",
-          detail:  org["유입경로_상세"] || org["유입 경로 상세"] || ""
+          detail:  org["유입경로_상세"] || org["유입 경로 상세"] || "",
+          name:    org.name || org["이름"] || org["회사명"] || ""
         };
       }
     }
