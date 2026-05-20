@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>세일즈맵 코호트 대시보드 v2.3.5</title>
+<title>세일즈맵 코호트 대시보드 v2.3.6</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -647,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.5</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.3.6</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -663,6 +663,14 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.3.6",
+    date: "2026-05-20",
+    label: "월별 추이 차트 세그먼트 클릭 완전 재작성",
+    items: [
+      { type:"fix", text:"renderPurchaseTypeTrend 전면 재작성 — innerHTML 문자열 방식 완전 제거, createElement + addEventListener 직접 부착으로 클릭 이벤트 100% 확실히 동작" }
+    ]
+  },
   {
     version: "2.3.5",
     date: "2026-05-20",
@@ -2737,62 +2745,69 @@ function renderPurchaseTypeTrend() {
     { key:"reactivated", label:"재활성화", color:"#d97706" }
   ];
 
-  const monthLabel = m => {
-    const [yy, mm] = m.split("-");
-    return mm === "01" ? `1월('${yy.slice(2)})` : `${parseInt(mm)}월`;
-  };
-
   const sqrtMax = Math.sqrt(maxTotal);
-  const bars = STATE.trendData.map(row => {
+
+  // ── DOM 직접 구성 — createElement + 직접 리스너 부착 (innerHTML 방식 완전 제거) ──
+  el.innerHTML = "";
+
+  const barsWrap = document.createElement("div");
+  barsWrap.style.cssText = "display:flex;align-items:flex-end;gap:4px;padding:8px 0 0";
+
+  STATE.trendData.forEach(row => {
     const total = row.new_.count + row.retention.count + row.reactivated.count;
-    const segs = CATS.map(({ key, label, color }) => {
-      if (!row[key].count) return "";
+    const col = document.createElement("div");
+    col.style.cssText = "display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;gap:2px";
+
+    const barBox = document.createElement("div");
+    barBox.style.cssText = `display:flex;flex-direction:column-reverse;width:100%;border-radius:3px 3px 0 0;overflow:hidden;height:${BAR_MAX_H}px;align-self:stretch;background:${total===0?"var(--line,#f0f0f0)":"none"}`;
+
+    CATS.forEach(({ key, label, color }) => {
+      if (!row[key].count) return;
       const h = sqrtMax > 0 ? Math.max(Math.round((Math.sqrt(row[key].count) / sqrtMax) * BAR_MAX_H), 5) : 5;
-      // data-* 속성으로 클릭 데이터 전달 — inline onclick 사용 안 함
-      return `<div data-trend-cat="${key}" data-trend-month="${row.month}"
-                   style="height:${h}px;background:${color};cursor:pointer;transition:opacity .15s;flex-shrink:0"
-                   title="${label} ${row[key].count}건 — 클릭해서 업체 확인"></div>`;
-    }).join("");
-    return `
-      <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;gap:2px">
-        <div style="display:flex;flex-direction:column-reverse;width:100%;border-radius:3px 3px 0 0;overflow:hidden;height:${BAR_MAX_H}px;align-self:stretch;background:${total===0?'var(--line,#f0f0f0)':'none'}">
-          ${segs}
-        </div>
-        <div style="font-size:10px;color:var(--fg-4);text-align:center;white-space:nowrap">${monthLabel(row.month)}</div>
-        ${total > 0 ? `<div style="font-size:10px;color:var(--fg-3);font-weight:600">${total}</div>` : ""}
-      </div>`;
-  }).join("");
-
-  const legend = CATS.map(({ color, label }) =>
-    `<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg-2)">
-      <div style="width:10px;height:10px;border-radius:50%;background:${color}"></div>${label}
-    </div>`
-  ).join("");
-
-  el.innerHTML = `
-    <div id="trend-bars-container" style="display:flex;align-items:flex-end;gap:4px;padding:8px 0 0">${bars}</div>
-    <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">${legend}</div>`;
-
-  // 이벤트 위임: 컨테이너 단일 리스너로 모든 세그먼트 클릭 처리
-  const barsContainer = document.getElementById("trend-bars-container");
-  if (barsContainer) {
-    barsContainer.addEventListener("click", function(e) {
-      const seg = e.target.closest("[data-trend-cat]");
-      if (!seg) return;
-      const cat   = seg.getAttribute("data-trend-cat");
-      const month = seg.getAttribute("data-trend-month");
-      _showTrendPopup(cat, month);
+      const seg = document.createElement("div");
+      seg.style.cssText = `height:${h}px;background:${color};cursor:pointer;transition:opacity .15s;flex-shrink:0`;
+      seg.title = `${label} ${row[key].count}건 — 클릭해서 업체 확인`;
+      // 직접 리스너 부착 (클로저로 값 캡처)
+      const _cat = key; const _month = row.month;
+      seg.addEventListener("click", function(e) {
+        e.stopPropagation();
+        _showTrendPopup(_cat, _month);
+      });
+      seg.addEventListener("mouseenter", function() { this.style.opacity = ".7"; });
+      seg.addEventListener("mouseleave", function() { this.style.opacity = "1"; });
+      barBox.appendChild(seg);
     });
-    // hover 효과 이벤트 위임
-    barsContainer.addEventListener("mouseover", function(e) {
-      const seg = e.target.closest("[data-trend-cat]");
-      if (seg) seg.style.opacity = ".7";
-    });
-    barsContainer.addEventListener("mouseout", function(e) {
-      const seg = e.target.closest("[data-trend-cat]");
-      if (seg) seg.style.opacity = "1";
-    });
-  }
+
+    const lbl = document.createElement("div");
+    lbl.style.cssText = "font-size:10px;color:var(--fg-4);text-align:center;white-space:nowrap";
+    const [yy, mm] = row.month.split("-");
+    lbl.textContent = mm === "01" ? `1월('${yy.slice(2)})` : `${parseInt(mm)}월`;
+
+    col.appendChild(barBox);
+    col.appendChild(lbl);
+    if (total > 0) {
+      const cnt = document.createElement("div");
+      cnt.style.cssText = "font-size:10px;color:var(--fg-3);font-weight:600";
+      cnt.textContent = total;
+      col.appendChild(cnt);
+    }
+    barsWrap.appendChild(col);
+  });
+
+  const legendWrap = document.createElement("div");
+  legendWrap.style.cssText = "display:flex;gap:16px;margin-top:10px;flex-wrap:wrap";
+  CATS.forEach(({ color, label }) => {
+    const item = document.createElement("div");
+    item.style.cssText = "display:flex;align-items:center;gap:5px;font-size:12px;color:var(--fg-2)";
+    const dot = document.createElement("div");
+    dot.style.cssText = `width:10px;height:10px;border-radius:50%;background:${color}`;
+    item.appendChild(dot);
+    item.appendChild(document.createTextNode(label));
+    legendWrap.appendChild(item);
+  });
+
+  el.appendChild(barsWrap);
+  el.appendChild(legendWrap);
 }
 
 // ── 업체명 팝업 (내부 함수, 이벤트 위임으로만 호출) ──
