@@ -2634,7 +2634,7 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
   return result;
 }
 
-// ── 월별 구매 유형 추이 렌더 ──
+// ── 월별 구매 유형 추이 렌더 (이벤트 위임 방식) ──
 function renderPurchaseTypeTrend() {
   const el = $("purchase-type-trend-chart");
   if (!el) return;
@@ -2661,10 +2661,10 @@ function renderPurchaseTypeTrend() {
     const segs = CATS.map(({ key, label, color }) => {
       if (!row[key].count) return "";
       const h = Math.max(Math.round((row[key].count / maxTotal) * BAR_MAX_H), 2);
-      return `<div onclick="showPurchaseTrendPopup('${key}','${row.month}')"
-                   style="height:${h}px;background:${color};cursor:pointer;transition:opacity .15s"
-                   onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'"
-                   title="${label} ${row[key].count}건 (클릭해서 업체 확인)"></div>`;
+      // data-* 속성으로 클릭 데이터 전달 — inline onclick 사용 안 함
+      return `<div data-trend-cat="${key}" data-trend-month="${row.month}"
+                   style="height:${h}px;background:${color};cursor:pointer;transition:opacity .15s;flex-shrink:0"
+                   title="${label} ${row[key].count}건 — 클릭해서 업체 확인"></div>`;
     }).join("");
     return `
       <div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;gap:2px">
@@ -2683,50 +2683,117 @@ function renderPurchaseTypeTrend() {
   ).join("");
 
   el.innerHTML = `
-    <div style="display:flex;align-items:flex-end;gap:4px;padding:8px 0 0">${bars}</div>
+    <div id="trend-bars-container" style="display:flex;align-items:flex-end;gap:4px;padding:8px 0 0">${bars}</div>
     <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">${legend}</div>`;
+
+  // 이벤트 위임: 컨테이너 단일 리스너로 모든 세그먼트 클릭 처리
+  const barsContainer = document.getElementById("trend-bars-container");
+  if (barsContainer) {
+    barsContainer.addEventListener("click", function(e) {
+      const seg = e.target.closest("[data-trend-cat]");
+      if (!seg) return;
+      const cat   = seg.getAttribute("data-trend-cat");
+      const month = seg.getAttribute("data-trend-month");
+      _showTrendPopup(cat, month);
+    });
+    // hover 효과 이벤트 위임
+    barsContainer.addEventListener("mouseover", function(e) {
+      const seg = e.target.closest("[data-trend-cat]");
+      if (seg) seg.style.opacity = ".7";
+    });
+    barsContainer.addEventListener("mouseout", function(e) {
+      const seg = e.target.closest("[data-trend-cat]");
+      if (seg) seg.style.opacity = "1";
+    });
+  }
 }
 
-// ── 팝업: 월별 구매 유형 업체명 ──
-function showPurchaseTrendPopup(cat, month) {
-  const row = STATE.trendData.find(r => r.month === month);
-  if (!row) return;
-  const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화" };
-  const [yy, mm] = month.split("-");
-  const monthStr = `${yy}년 ${parseInt(mm)}월`;
-  const orgs = row[cat].orgs;
+// ── 업체명 팝업 (내부 함수, 이벤트 위임으로만 호출) ──
+function _showTrendPopup(cat, month) {
+  const row = (STATE.trendData || []).find(r => r.month === month);
+  if (!row || !row[cat]) return;
 
-  let popup = document.getElementById("purchase-trend-popup");
-  if (!popup) {
-    popup = document.createElement("div");
-    popup.id = "purchase-trend-popup";
-    popup.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center";
-    popup.onclick = e => { if (e.target === popup) hidePurchaseTrendPopup(); };
-    document.body.appendChild(popup);
+  const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화" };
+  const COLOR  = { new_:"#2563eb", retention:"#16a34a", reactivated:"#d97706" };
+  const [yy, mm] = month.split("-");
+  const monthStr  = `${yy}년 ${parseInt(mm)}월`;
+  const orgs = row[cat].orgs || [];
+  const color = COLOR[cat] || "#888";
+
+  // 팝업 DOM 구성 (innerHTML 없이 직접 DOM 조작)
+  let overlay = document.getElementById("_trend-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "_trend-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center";
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) _hideTrendPopup();
+    });
+
+    const box = document.createElement("div");
+    box.id = "_trend-box";
+    box.style.cssText = "background:#fff;border-radius:12px;padding:24px;min-width:300px;max-width:420px;max-height:75vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)";
+    box.addEventListener("click", function(e) { e.stopPropagation(); });
+
+    const hdr = document.createElement("div");
+    hdr.id = "_trend-hdr";
+    hdr.style.cssText = "display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px";
+
+    const titleWrap = document.createElement("div");
+    const subEl = document.createElement("div");
+    subEl.id = "_trend-sub";
+    subEl.style.cssText = "font-size:13px;color:#888;margin-bottom:4px";
+    const titleEl = document.createElement("h3");
+    titleEl.id = "_trend-title";
+    titleEl.style.cssText = "margin:0;font-size:16px;font-weight:600";
+    titleWrap.appendChild(subEl);
+    titleWrap.appendChild(titleEl);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "×";
+    closeBtn.style.cssText = "border:none;background:none;cursor:pointer;font-size:24px;color:#999;line-height:1;padding:0 4px;margin-left:12px;flex-shrink:0";
+    closeBtn.addEventListener("click", _hideTrendPopup);
+
+    hdr.appendChild(titleWrap);
+    hdr.appendChild(closeBtn);
+
+    const listEl = document.createElement("div");
+    listEl.id = "_trend-list";
+
+    box.appendChild(hdr);
+    box.appendChild(listEl);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
   }
 
-  const color = { new_:"#2563eb", retention:"#16a34a", reactivated:"#d97706" }[cat];
-  const items = orgs.length
-    ? orgs.map((n,i) => `<div style="padding:8px 0;border-bottom:1px solid var(--line,#eee);font-size:14px;color:var(--fg-1)">${i+1}. ${n}</div>`).join("")
-    : `<div style="padding:16px 0;color:var(--fg-4);text-align:center;font-size:13px">업체명 데이터 없음</div>`;
+  // 내용 업데이트
+  document.getElementById("_trend-sub").textContent = monthStr;
+  const titleEl = document.getElementById("_trend-title");
+  titleEl.textContent = `${LABEL[cat] || cat} ${orgs.length}건`;
+  titleEl.style.color = color;
 
-  popup.innerHTML = `
-    <div onclick="event.stopPropagation()" style="background:var(--surface,#fff);border-radius:12px;padding:24px;min-width:300px;max-width:420px;max-height:75vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div>
-          <div style="font-size:14px;color:var(--fg-4);margin-bottom:2px">${monthStr}</div>
-          <h3 style="margin:0;font-size:16px;font-weight:600;color:${color}">${LABEL[cat]} ${orgs.length}건</h3>
-        </div>
-        <button onclick="hidePurchaseTrendPopup()" style="border:none;background:none;cursor:pointer;font-size:22px;color:var(--fg-3);line-height:1;padding:0 4px">×</button>
-      </div>
-      <div>${items}</div>
-    </div>`;
-  popup.style.display = "flex";
+  const listEl = document.getElementById("_trend-list");
+  listEl.innerHTML = "";
+  if (orgs.length) {
+    orgs.forEach((name, i) => {
+      const row2 = document.createElement("div");
+      row2.style.cssText = "padding:9px 0;border-bottom:1px solid #eee;font-size:14px;color:#222";
+      row2.textContent = `${i + 1}. ${name}`;
+      listEl.appendChild(row2);
+    });
+  } else {
+    const empty = document.createElement("div");
+    empty.style.cssText = "padding:16px 0;color:#aaa;text-align:center;font-size:13px";
+    empty.textContent = "업체명 데이터 없음";
+    listEl.appendChild(empty);
+  }
+
+  overlay.style.display = "flex";
 }
 
-function hidePurchaseTrendPopup() {
-  const popup = document.getElementById("purchase-trend-popup");
-  if (popup) popup.style.display = "none";
+function _hideTrendPopup() {
+  const overlay = document.getElementById("_trend-overlay");
+  if (overlay) overlay.style.display = "none";
 }
 
 // 딜 목록에서 대시보드 지표 계산
