@@ -3348,8 +3348,9 @@ function computeFromDeals(deals, leads = []) {
       if (totalSec > 0) {
         dealWonCycleSec.push(totalSec);
         if (src) {
-          if (!dealWonCycleSecBySource[src]) dealWonCycleSecBySource[src] = [];
-          dealWonCycleSecBySource[src].push(totalSec);
+          const srcTop = (src || "").split(" · ")[0].trim(); // 대분류만
+          if (!dealWonCycleSecBySource[srcTop]) dealWonCycleSecBySource[srcTop] = [];
+          dealWonCycleSecBySource[srcTop].push(totalSec);
         }
       }
     }
