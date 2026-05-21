@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.2</title>
+<title>플로우페이 코호트 대시보드 v2.5.3</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -279,7 +279,18 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="g g5" id="kpi-grid" style="margin-bottom:16px"></div>
       <div class="g g-auto">
         <div class="card">
-          <div class="card-header"><h3>코호트 전환 현황</h3><span class="pill pill-gray" id="cohort-period-label">2026년 5월</span></div>
+          <div class="card-header">
+            <h3>코호트 전환 현황</h3>
+            <div style="display:flex;gap:6px;align-items:center">
+              <select id="cohort-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
+                <option value="all">전체</option>
+                <option value="monthly" selected>월간</option>
+                <option value="quarterly">분기</option>
+                <option value="yearly">연간</option>
+              </select>
+              <select id="cohort-period-value" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px;min-width:90px"></select>
+            </div>
+          </div>
           <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>자금집행 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
         </div>
         <div class="card">
@@ -662,7 +673,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.5.2</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.5.3</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -678,6 +689,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.3",
+    date: "2026-05-21",
+    label: "코호트 전환 현황 기간 필터 + 고객 유형 딜 기준 계산",
+    items: [
+      { type:"feat", text:"코호트 전환 현황 카드에 기간 선택기 추가 — 전체·월간·분기·연간 필터 적용 (거래 준비 진입 날짜 기준)" },
+      { type:"fix",  text:"고객 유형 계산 수정 — 분모를 org 수(유입)에서 딜 수(신규+리텐션 합계)로 변경, 100% 초과 오류 해소" },
+      { type:"feat", text:"기간 필터 시 유입 업체 수 = 해당 기간 딜에 연결된 고유 org 수로 동적 산출" }
+    ]
+  },
   {
     version: "2.5.2",
     date: "2026-05-21",
@@ -1295,6 +1316,7 @@ const STATE = {
   funnelData:        null,      // null = 미로드
   pipelineMetrics:   null,      // null = 미로드
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
+  rawLeads:          [],         // 원본 리드 목록 (기간 필터 재계산용)
   orgMap:            {},         // organizationId → { channel, detail, name } (유입경로 + 업체명 조인)
   orgChannelCount:   {},         // 진단: 채널별 등록 업체 수
   trendData:         [],         // 월별 구매 유형 추이 (computeMonthlyPurchaseTypeTrend 결과)
@@ -1302,6 +1324,8 @@ const STATE = {
   funnelPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
   custPeriodType:   'monthly',
   custPeriodValue:  (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
+  cohortPeriodType:  'monthly',
+  cohortPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
   dataLoaded:      false,
   dataLoading:     false,
   dataLoadedAt:    null,
@@ -1475,7 +1499,8 @@ function renderCohortTable() {
   Object.values(groupMap).forEach(g => {
     const dr   = g.input ? (g.deals / g.input * 100).toFixed(1) : 0;
     const barW = Math.min(Number(dr), 100);
-    const custBreak = g.input ? `${Math.round((g.new_ / g.input) * 100)}% 신규` : "–";
+    const dealTypeTot = (g.new_ + g.retention) || 0;
+    const custBreak = dealTypeTot ? `${Math.round((g.new_ / dealTypeTot) * 100)}% 신규` : "–";
     const hasSub = g.items.length > 1;
 
     const tr = document.createElement("tr");
@@ -1497,7 +1522,7 @@ function renderCohortTable() {
     }
     tbody.appendChild(tr);
   });
-  $("cohort-period-label").textContent = STATE.period;
+  // cohort-period-label removed — period shown via selector
 }
 
 // 코호트 세부 채널 팝업
@@ -2537,6 +2562,14 @@ document.addEventListener("change", e => {
   } else if (e.target.id === "cust-period-value") {
     STATE.custPeriodValue = e.target.value;
     renderCustomerType();
+  } else if (e.target.id === "cohort-period-type") {
+    STATE.cohortPeriodType = e.target.value;
+    STATE.cohortPeriodValue = "";
+    populateCohortPeriodOptions();
+    recomputeCohortForPeriod();
+  } else if (e.target.id === "cohort-period-value") {
+    STATE.cohortPeriodValue = e.target.value;
+    recomputeCohortForPeriod();
   }
 });
 
@@ -2864,6 +2897,132 @@ function detectRegressions(deals, mapping) {
 }
 
 // ── 퍼널 기간 범위 계산 ──
+// ── 코호트 기간 선택기 옵션 생성 ──
+function populateCohortPeriodOptions() {
+  const typeEl = $("cohort-period-type");
+  const valEl  = $("cohort-period-value");
+  if (!typeEl || !valEl) return;
+  const type = typeEl.value;
+  if (type === 'all') { valEl.innerHTML = ''; valEl.style.display = 'none'; return; }
+  valEl.style.display = '';
+  const now = new Date(); const y = now.getFullYear(); const m = now.getMonth() + 1;
+  let opts = [];
+  if (type === 'monthly') {
+    for (let i = 0; i < 12; i++) {
+      let mm = m - i; let yy = y;
+      if (mm <= 0) { mm += 12; yy--; }
+      opts.push({ v: `${yy}-${String(mm).padStart(2,'0')}`, l: `${yy}년 ${mm}월` });
+    }
+  } else if (type === 'quarterly') {
+    for (let i = 0; i < 6; i++) {
+      let q = Math.ceil(m / 3) - i; let yy = y;
+      while (q <= 0) { q += 4; yy--; }
+      opts.push({ v: `${yy}Q${q}`, l: `${yy}년 ${q}분기` });
+    }
+  } else if (type === 'yearly') {
+    for (let i = 0; i < 5; i++) opts.push({ v: String(y - i), l: `${y - i}년` });
+  }
+  const cur = STATE.cohortPeriodValue;
+  valEl.innerHTML = opts.map(o => `<option value="${o.v}" ${cur === o.v || (!opts.some(x=>x.v===cur) && opts[0].v===o.v) ? 'selected' : ''}>${o.l}</option>`).join('');
+  if (!opts.some(o => o.v === cur)) {
+    STATE.cohortPeriodValue = opts[0]?.v || '';
+    valEl.value = STATE.cohortPeriodValue;
+  }
+}
+
+// ── 코호트 기간 필터 재계산 ──
+function recomputeCohortForPeriod() {
+  if (!STATE.dataLoaded) return;
+  const type  = STATE.cohortPeriodType;
+  const value = STATE.cohortPeriodValue;
+
+  const entryKey = "거래 준비(세일즈 파이프라인)로 진입한 날짜";
+  const leadEntryKey = "거래 준비(리드 파이프라인)로 진입한 날짜";
+
+  let filteredDeals = STATE.rawDeals;
+  let filteredLeads = STATE.rawLeads;
+
+  if (type !== 'all') {
+    const range = getFunnelDateRange(type, value);
+    if (range) {
+      filteredDeals = STATE.rawDeals.filter(d => {
+        const v = d[entryKey] || d["createdAt"] || d["created_at"] || d["생성일"] || null;
+        if (!v) return false;
+        const t = new Date(v);
+        return t >= range.from && t <= range.to;
+      });
+      filteredLeads = STATE.rawLeads.filter(d => {
+        const v = d[leadEntryKey] || d["createdAt"] || d["created_at"] || d["생성일"] || null;
+        if (!v) return false;
+        const t = new Date(v);
+        return t >= range.from && t <= range.to;
+      });
+    }
+  }
+
+  // 소스맵 재집계
+  const mapping  = STATE.pipelineMapping || getPipelineMapping();
+  const wonStages = mapping.filter(m => m.cat === "성사").map(m => m.stage);
+  const sourceMap = {};
+  const seenOrgIdsPerTop = {};
+
+  for (const deal of filteredDeals) {
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    const src = detectDealSource(deal);
+    const purchaseType = parseDealPurchaseType(deal);
+    if (src) {
+      if (!sourceMap[src]) sourceMap[src] = { input:0, deals:0, paid:0, new_:0, repeat:0 };
+      sourceMap[src].input++;
+      if (purchaseType === "Repeat") sourceMap[src].repeat++;
+      else sourceMap[src].new_++;
+      if (cur && wonStages.includes(cur)) sourceMap[src].deals++;
+      if (cur && cur === "자금집행 완료") sourceMap[src].paid++;
+    }
+    // 기간 내 유입 = 해당 기간 딜에 연결된 고유 org 수 (채널별)
+    const orgId = String(deal.organizationId || deal["organization_id"] || deal["조직ID"] || deal["조직 ID"] || "");
+    if (orgId && STATE.orgMap[orgId]) {
+      const orgTop = ((STATE.orgMap[orgId].channel || "").split(" · ")[0].trim()) || "(미분류)";
+      if (!seenOrgIdsPerTop[orgTop]) seenOrgIdsPerTop[orgTop] = new Set();
+      seenOrgIdsPerTop[orgTop].add(orgId);
+    }
+  }
+
+  // 기간 내 유입 업체 수 (딜 기반)
+  const orgForPeriod = {};
+  for (const [top, ids] of Object.entries(seenOrgIdsPerTop)) orgForPeriod[top] = ids.size;
+
+  // 유입이 기간 전체(all)면 원래 orgChannelCount 사용
+  const orgSource = (type === 'all') ? STATE.orgChannelCount : orgForPeriod;
+
+  const leadsSourceMap = {};
+  for (const lead of filteredLeads) {
+    const lsrc = detectDealSource(lead);
+    if (lsrc) leadsSourceMap[lsrc] = (leadsSourceMap[lsrc] || 0) + 1;
+  }
+
+  if (Object.keys(sourceMap).length) {
+    const seenTops = new Set();
+    STATE.cohortsBySource = Object.entries(sourceMap).map(([source, v]) => {
+      const top = (source || "").split(" · ")[0].trim();
+      const orgInput = !seenTops.has(top) ? (orgSource[top] || 0) : 0;
+      if (!seenTops.has(top)) seenTops.add(top);
+      return {
+        source, label: source,
+        input: orgInput,
+        leads: leadsSourceMap[source] || 0,
+        deals: v.input,
+        paid:  v.paid,
+        new_:  v.new_,
+        retention: v.repeat,
+        reactivated: 0
+      };
+    });
+  } else {
+    STATE.cohortsBySource = [];
+  }
+  renderCohortTable();
+}
+
 function getFunnelDateRange(type, value) {
   if (!value) return null;
   let from, to;
@@ -3592,8 +3751,10 @@ async function loadRealData() {
       }
       STATE.orgChannelCount = orgChannelCount; // 진단 데이터 저장
     }
+    STATE.rawLeads = leads;
     if (deals.length) {
       computeFromDeals(deals, leads);
+      populateCohortPeriodOptions();  // 코호트 기간 옵션 초기화
       repopulateSourceFilter();   // 실제 유입경로 값으로 드롭다운 갱신
       fetchPipelineVelocityFromDeals(deals).catch(() => {});
     }
