@@ -664,6 +664,15 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.4.7",
+    date: "2026-05-21",
+    label: "자금집행 완료 중복 표시 수정 + 결제 완료 → 딜 완료 표시명 변경",
+    items: [
+      { type:"fix",  text:"히트맵 STAGE_LABEL '결제 완료' → '딜 완료' 변경 (자금집행 완료 중복 표시 해소)" },
+      { type:"fix",  text:"PIPELINE_STAGE_DEFAULTS '결제 완료' 표시명 → '딜 완료' 변경 (velocity 테이블 반영)" }
+    ]
+  },
+  {
     version: "2.4.6",
     date: "2026-05-21",
     label: "4·5월 데이터 복원 + P50/P75/P90 팝업 개선",
@@ -3292,7 +3301,7 @@ const PIPELINE_STAGE_DEFAULTS = [
   // ── 완료: 자금집행 완료 ──
   { pipe:"세일즈", stage:"자금집행 완료",  label:"자금집행 완료",  cat:"완료", threshH:0,   include:true  },
   // ── 1차 종료: 성사 ──
-  { pipe:"세일즈", stage:"결제 완료",      label:"결제 완료",      cat:"성사", threshH:0,   include:true  },
+  { pipe:"세일즈", stage:"결제 완료",      label:"딜 완료",        cat:"성사", threshH:0,   include:true  },
   // ── 채권추심: 결제 완료로 전환 가능 (비터미널) ──
   { pipe:"세일즈", stage:"결제 지연",      label:"결제 지연",      cat:"채권", threshH:0,   include:true  },
   // ── 1차 종료: 실패 (터미널) ──
@@ -3534,7 +3543,7 @@ function renderDwellHeatmap(useMock = false) {
   html += `</tr></thead><tbody>`;
 
   // 표시명 재정의 — Salesmap 내부 단계명 → 대시보드 표시명
-  const STAGE_LABEL = { "결제 완료": "자금집행 완료" };
+  const STAGE_LABEL = { "결제 완료": "딜 완료" };
 
   for (const stage of stageOrder) {
     const displayStage = STAGE_LABEL[stage] || stage;
