@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.4.9</title>
+<title>플로우페이 코호트 대시보드 v2.5.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -647,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.3.8</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.5.0</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -663,6 +663,18 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.0",
+    date: "2026-05-21",
+    label: "영업 사이클 테이블 유입경로 대분류 집계 + 데이터 유효성 전수 조사",
+    items: [
+      { type:"feat", text:"코호트별 영업 사이클 — 전체 1행 → 대분류 7행(전체+6채널) 확장: 네트워크·아웃바운드·오프/행사·외부채널·인바운드·재유입/기타" },
+      { type:"fix",  text:"세부채널(외부채널·그랜터 등) 개별 행 표시 → topLevelOf() 적용, 대분류로 합산 집계" },
+      { type:"fix",  text:"전체 행 배경 강조·볼드, 채널 행 들여쓰기로 계층 구분" },
+      { type:"fix",  text:"재활성화/리텐션 추이 막대 차트 — 각 막대 상단 건수 숫자 표시" },
+      { type:"feat", text:"6월 리텐션 예측 후보 업체명 태그 표시 (주기 기반 후보)" }
+    ]
+  },
   {
     version: "2.4.9",
     date: "2026-05-21",
