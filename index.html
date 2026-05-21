@@ -2728,11 +2728,11 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
   const wonDeals = allDeals
     .map(d => {
       const dwells = parseStageDwells(d, "세일즈 파이프라인");
+      // 거래일 = 자금수요예측일(추측 데이터) — 집계 제외
+      // 자금집행 완료 단계 진입 OR 결제 완료 단계 진입 건만 반영
       const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
-      const fb1Raw    = d["거래일"];
-      const fb1       = fb1Raw ? new Date(fb1Raw).getTime() : null;
       const fb2       = dwells["결제 완료"]?.enteredTs || null;
-      const enteredTs = primaryTs || (fb1 && !isNaN(fb1) ? fb1 : null) || fb2 || null;
+      const enteredTs = primaryTs || fb2 || null;
       const purchaseType = d["구매이력"] || null; // "New" | "Repeat" | null
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       return { orgId, enteredTs, purchaseType };
@@ -2788,11 +2788,11 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
   const wonDeals = allDeals
     .map(d => {
       const dwells    = parseStageDwells(d, "세일즈 파이프라인");
+      // 거래일 = 자금수요예측일(추측 데이터) — 집계 제외
+      // 자금집행 완료 단계 진입 OR 결제 완료 단계 진입 건만 반영
       const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
-      const fb1Raw    = d["거래일"];
-      const fb1       = fb1Raw ? new Date(fb1Raw).getTime() : null;
       const fb2       = dwells["결제 완료"]?.enteredTs || null;
-      const enteredTs = primaryTs || (fb1 && !isNaN(fb1) ? fb1 : null) || fb2 || null;
+      const enteredTs = primaryTs || fb2 || null;
       const purchaseType = d["구매이력"] || null;
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       const orgName = STATE.orgMap[orgId]?.name || d["회사"] || d["organizationName"] || d["이름"] || orgId;
