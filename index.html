@@ -1687,14 +1687,21 @@ function renderCycles() {
     $("cycle-rows").innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
     return;
   }
-  $("cycle-rows").innerHTML = STATE.cycles.map(c => `<tr>
-    <td>${c.source}</td>
-    <td><strong>${c.p50}일</strong></td>
-    <td>${c.p75}일</td>
-    <td>${c.p90}일</td>
-    <td style="color:var(--muted)">${c.max}일</td>
-    <td>${c.outlier > 2 ? `<span style="color:var(--red);font-weight:700">${c.outlier}</span>` : c.outlier}</td>
-  </tr>`).join("");
+  $("cycle-rows").innerHTML = STATE.cycles.map(c => {
+    const isTotal = c.source === "전체";
+    const rowStyle = isTotal ? ` style="background:rgba(var(--accent-rgb,99,102,241),0.06);font-weight:600"` : "";
+    const srcCell = isTotal
+      ? `<td><span style="font-weight:700">${c.source}</span></td>`
+      : `<td style="padding-left:18px;color:var(--fg-2)">${c.source}</td>`;
+    return `<tr${rowStyle}>
+      ${srcCell}
+      <td><strong>${c.p50}일</strong></td>
+      <td>${c.p75}일</td>
+      <td>${c.p90}일</td>
+      <td style="color:var(--muted)">${c.max}일</td>
+      <td>${c.outlier > 2 ? `<span style="color:var(--red);font-weight:700">${c.outlier}</span>` : c.outlier}</td>
+    </tr>`;
+  }).join("");
 }
 
 // 리텐션 차트
@@ -3304,6 +3311,7 @@ function computeFromDeals(deals, leads = []) {
   // 단계별 현재 카운트 (세일즈 파이프라인)
   const stageCounts = {};
   const dealWonCycleSec = [];       // 성사 딜 전체 체류 합산 (영업 사이클)
+  const dealWonCycleSecBySource = {}; // 소스별 체류 합산
   const monthlyMap = {};            // YYYY-MM → { input, leads, deals, paid }
   const sourceMap  = {};            // source → { input, deals, paid }
 
@@ -3337,7 +3345,13 @@ function computeFromDeals(deals, leads = []) {
     if (cur && wonStages.includes(cur)) {
       const dwells = parseStageDwells(deal, "세일즈 파이프라인");
       const totalSec = Object.values(dwells).reduce((s, d) => s + (d.dwellSec || 0), 0);
-      if (totalSec > 0) dealWonCycleSec.push(totalSec);
+      if (totalSec > 0) {
+        dealWonCycleSec.push(totalSec);
+        if (src) {
+          if (!dealWonCycleSecBySource[src]) dealWonCycleSecBySource[src] = [];
+          dealWonCycleSecBySource[src].push(totalSec);
+        }
+      }
     }
   }
 
@@ -3396,9 +3410,10 @@ function computeFromDeals(deals, leads = []) {
     }];
   }
 
-  // 영업 사이클 (파이프라인 전체)
+  // 영업 사이클 (파이프라인 전체 + 소스별)
   if (dealWonCycleSec.length) {
     const toDay = sec => +(sec / 86400).toFixed(1);
+    const SOURCE_ORDER = ["네트워크", "아웃바운드", "오프/행사", "외부채널", "인바운드", "재유입/기타"];
     STATE.cycles = [{
       source: "전체",
       p50: toDay(percentileOf(dealWonCycleSec, 50)),
@@ -3407,6 +3422,23 @@ function computeFromDeals(deals, leads = []) {
       max: toDay(Math.max(...dealWonCycleSec)),
       outlier: dealWonCycleSec.filter(s => s / 86400 > 90).length
     }];
+    // 소스별 행 추가 — 정렬 순서: 정의된 6개 우선, 나머지 알파벳
+    const srcKeys = [
+      ...SOURCE_ORDER.filter(k => dealWonCycleSecBySource[k]),
+      ...Object.keys(dealWonCycleSecBySource).filter(k => !SOURCE_ORDER.includes(k)).sort()
+    ];
+    for (const s of srcKeys) {
+      const secArr = dealWonCycleSecBySource[s];
+      if (!secArr || !secArr.length) continue;
+      STATE.cycles.push({
+        source: s,
+        p50: toDay(percentileOf(secArr, 50)),
+        p75: toDay(percentileOf(secArr, 75)),
+        p90: toDay(percentileOf(secArr, 90)),
+        max: toDay(Math.max(...secArr)),
+        outlier: secArr.filter(s => s / 86400 > 90).length
+      });
+    }
   }
 
   STATE.regressions = detectRegressions(deals, mapping);
