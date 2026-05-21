@@ -632,6 +632,21 @@ tbody tr:hover td{background:var(--primary-50)}
         </div>
       </div>
 
+      <!-- 유입경로_상세 진단 -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <h3>유입경로_상세 항목 진단</h3>
+          <span class="pill pill-gray">채널별 세부 분류 확인</span>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            등록 업체의 <strong>유입경로_상세</strong> 필드값을 채널별로 집계합니다.
+            '오프/행사', '재유입/기타' 채널의 세부 항목을 확인하세요.
+          </div>
+          <div id="detail-diag-table" style="font-size:13px">데이터 로딩 후 표시됩니다.</div>
+        </div>
+      </div>
+
       <!-- 파이프라인 매핑 설정 -->
       <div class="card" style="margin-top:16px">
         <div class="card-header">
@@ -1814,6 +1829,69 @@ function renderChannelDiag() {
   <div style="margin-top:10px;font-size:11px;color:var(--muted)">⚠ 표시 = 등록 업체는 많지만 파이프라인에 딜이 없거나 1건 이하인 채널</div>`;
 }
 
+// 유입경로_상세 항목 진단
+function renderDetailDiag() {
+  const el = $("detail-diag-table");
+  if (!el) return;
+  if (!STATE.dataLoaded) { el.textContent = "데이터 로딩 후 표시됩니다."; return; }
+
+  // orgMap에서 채널별 → 상세값별 업체 수 집계
+  const channelDetailMap = {}; // topChannel → { detailVal → orgCount }
+  for (const [orgId, info] of Object.entries(STATE.orgMap)) {
+    const top = (info.channel || "").split(" · ")[0].trim() || "(미분류)";
+    const detail = info.detail || "(상세 없음)";
+    if (!channelDetailMap[top]) channelDetailMap[top] = {};
+    channelDetailMap[top][detail] = (channelDetailMap[top][detail] || 0) + 1;
+  }
+
+  // sourceMap에서 채널별 → 상세별 딜 수 집계 (STATE.cohortsBySource 활용)
+  const channelDealDetailMap = {};
+  for (const c of STATE.cohortsBySource) {
+    const top  = (c.source || "").split(" · ")[0].trim();
+    const detail = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : "(상세 없음)";
+    if (!channelDealDetailMap[top]) channelDealDetailMap[top] = {};
+    channelDealDetailMap[top][detail] = (channelDealDetailMap[top][detail] || 0) + (c.deals || 0);
+  }
+
+  const HIGHLIGHT = new Set(["오프/행사", "재유입/기타"]);
+  const sortedChannels = Object.keys(channelDetailMap).sort((a, b) => {
+    // 오프/행사, 재유입/기타 상단 배치
+    if (HIGHLIGHT.has(a) && !HIGHLIGHT.has(b)) return -1;
+    if (!HIGHLIGHT.has(a) && HIGHLIGHT.has(b)) return 1;
+    return a.localeCompare(b);
+  });
+
+  let html = "";
+  for (const ch of sortedChannels) {
+    const details = channelDetailMap[ch];
+    const isHL = HIGHLIGHT.has(ch);
+    const dealDetails = channelDealDetailMap[ch] || {};
+    const sortedDetails = Object.entries(details).sort((a, b) => b[1] - a[1]);
+    html += `<div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;padding:4px 8px;background:${isHL ? "rgba(99,102,241,.08)" : "var(--bg-2)"};border-radius:6px;margin-bottom:4px;${isHL ? "color:var(--primary-600,#4f46e5);" : ""}">
+        ${isHL ? "★ " : ""}${ch} <span style="font-weight:400;color:var(--muted)">(${Object.values(details).reduce((a,b)=>a+b,0)}개 업체)</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-left:8px">
+        <thead><tr style="color:var(--muted)">
+          <th style="text-align:left;padding:3px 8px;font-weight:500">유입경로_상세</th>
+          <th style="text-align:right;padding:3px 8px;font-weight:500">업체 수</th>
+          <th style="text-align:right;padding:3px 8px;font-weight:500">딜 수</th>
+        </tr></thead>
+        <tbody>${sortedDetails.map(([det, cnt]) => {
+          const dealCnt = dealDetails[det] || dealDetails["(상세 없음)"] || 0;
+          return `<tr style="border-top:1px solid var(--line-light,#f1f5f9)">
+            <td style="padding:4px 8px">${det}</td>
+            <td style="text-align:right;padding:4px 8px">${cnt}</td>
+            <td style="text-align:right;padding:4px 8px;color:${dealCnt === 0 ? "var(--red,#ef4444)" : "inherit"}">${dealCnt || "–"}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </div>`;
+  }
+
+  el.innerHTML = html || "조직 데이터 없음 (설정 탭 → API 키 확인)";
+}
+
 // 리텐션 차트
 function renderRetention() {
   const el = $("retention-chart");
@@ -2512,7 +2590,7 @@ function renderAll() {
   renderLedger();
   renderSettingsView();
   renderPipelineMapping();
-  renderChannelDiag();
+  renderChannelDiag(); renderDetailDiag();
   renderUpdates();
   $("topbar-asof").textContent = "기준: " + now();
   $("sb-slack-user").textContent = STATE.settings.slackUser || "@예충희";
