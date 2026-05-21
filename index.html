@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.3</title>
+<title>플로우페이 코호트 대시보드 v2.5.5</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -226,6 +226,8 @@ tbody tr:hover td{background:var(--primary-50)}
     <button class="nav-btn" data-view="ledger"><span class="icon">📋</span>이벤트 원장</button>
     <div class="sb-section">설정</div>
     <button class="nav-btn" data-view="settings"><span class="icon">⚙️</span>연동 설정</button>
+    <button class="nav-btn" data-view="weekly"><span class="icon">📆</span>주간 보고</button>
+    <button class="nav-btn" data-view="reports"><span class="icon">🗂️</span>보고서 목록</button>
     <button class="nav-btn" data-view="updates"><span class="icon">📝</span>업데이트 내역</button>
   </div>
   <div class="sb-foot">
@@ -683,6 +685,60 @@ tbody tr:hover td{background:var(--primary-50)}
       </div>
     </div>
 
+    <!-- ══════ 주간 보고 ══════ -->
+    <div class="section" id="view-weekly">
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <h3>주간 보고서</h3>
+          <span class="pill pill-gray" id="weekly-range-label">기간 계산 중…</span>
+        </div>
+        <div class="card-body" style="padding:12px 16px;font-size:13px;color:var(--fg-3)">
+          보고 기간: <strong id="weekly-period-text">—</strong>
+          &nbsp;
+          <button id="btn-weekly-refresh" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px">🔄 새로고침</button>
+          &nbsp;
+          <button id="btn-weekly-save" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px">💾 저장</button>
+          &nbsp;
+          <button id="btn-weekly-md" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px">📥 MD</button>
+        </div>
+      </div>
+
+      <!-- 코호트 섹션 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <h3>유입 채널별 코호트</h3>
+          <span class="pill pill-gray">이번 주 기준</span>
+        </div>
+        <div class="card-body np tw">
+          <div id="weekly-cohort-wrap" style="padding:32px;text-align:center;color:var(--fg-4)">로딩 중…</div>
+        </div>
+      </div>
+
+      <!-- 세일즈 활동 섹션 -->
+      <div class="card">
+        <div class="card-header">
+          <h3>세일즈 활동</h3>
+          <span class="pill pill-gray">이번 주 기준</span>
+        </div>
+        <div class="card-body">
+          <div id="weekly-activity-wrap" style="padding:32px;text-align:center;color:var(--fg-4)">로딩 중…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ 보고서 목록 ══════ -->
+    <div class="section" id="view-reports">
+      <div class="card">
+        <div class="card-header">
+          <h3>🗂️ 보고서 목록</h3>
+          <button id="btn-reports-clear" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;color:var(--danger-500)">전체 삭제</button>
+        </div>
+        <div class="card-body np">
+          <div id="reports-list-wrap" style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══════ 업데이트 내역 ══════ -->
     <div class="section" id="view-updates">
       <div class="card">
@@ -704,6 +760,26 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.5",
+    date: "2026-05-22",
+    label: "보고서 목록 탭 + 주간 보고서 저장·MD 내보내기",
+    items: [
+      { type:"feat", text:"보고서 목록 탭 — 주간 보고서 저장·조회 (localStorage)" },
+      { type:"feat", text:"주간 보고서 💾 저장 / 📥 MD 내보내기 버튼" },
+      { type:"feat", text:"보고서 목록에서 개별 MD 다운로드 및 삭제" }
+    ]
+  },
+  {
+    version: "2.5.4",
+    date: "2026-05-21",
+    label: "주간 보고서",
+    items: [
+      { type:"feat", text:"주간 보고서 탭 추가 (전주 금 16:00:01 ~ 당주 금 16:00:00)" },
+      { type:"feat", text:"코호트 주간 집계 + 액티비티 현황 (API graceful fallback)" },
+      { type:"feat", text:"주간 Slack 메시지 포맷 추가 (buildWeeklySlackMsg)" }
+    ]
+  },
   {
     version: "2.5.3",
     date: "2026-05-21",
@@ -1332,6 +1408,8 @@ const STATE = {
   pipelineMetrics:   null,      // null = 미로드
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
   rawLeads:          [],         // 원본 리드 목록 (기간 필터 재계산용)
+  rawOrgs:           [],         // 원본 조직 목록 (주간 보고서용)
+  weeklyActivity:    null,       // 주간 활동 데이터
   orgMap:            {},         // organizationId → { channel, detail, name } (유입경로 + 업체명 조인)
   orgChannelCount:   {},         // 진단: 채널별 등록 업체 수
   trendData:         [],         // 월별 구매 유형 추이 (computeMonthlyPurchaseTypeTrend 결과)
@@ -1397,6 +1475,71 @@ const STATE = {
 // ══════════════════════════════════════════════
 // 대분류 선택 시 " · " 구분자 하위 소스 전부 포함
 function topLevelOf(src) { return (src || "").split(" · ")[0].trim(); }
+
+// ── 주간 보고서 기간: 전주 금 16:00:01 ~ 당주 금 16:00:00 (KST) ──
+function getWeeklyReportRange() {
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  const nowUtcMs = Date.now();
+  const nowKstMs = nowUtcMs + KST_OFFSET_MS;
+  const nowKst = new Date(nowKstMs);
+
+  // KST 기준 요일 (0=일, 5=금)
+  const dayKst = nowKst.getUTCDay();
+  const hourKst = nowKst.getUTCHours();
+  const minKst  = nowKst.getUTCMinutes();
+  const secKst  = nowKst.getUTCSeconds();
+
+  // 당주 금요일 KST 자정 (UTC)
+  const daysUntilFri = (5 - dayKst + 7) % 7;
+  const daysSinceFri = (dayKst - 5 + 7) % 7;
+
+  // endFri = 가장 최근 지난 금요일 16:00:00 KST
+  // 오늘이 금요일(5)이고 현재 시각 >= 16:00:00이면 오늘 금요일 16:00:00
+  let endFri;
+  if (dayKst === 5 && (hourKst > 16 || (hourKst === 16 && (minKst > 0 || secKst > 0)))) {
+    // 오늘 금요일 16:00:00 KST (UTC로 변환)
+    endFri = new Date(Date.UTC(
+      nowKst.getUTCFullYear(), nowKst.getUTCMonth(), nowKst.getUTCDate(),
+      16 - 9, 0, 0, 0  // KST 16:00 = UTC 07:00
+    ));
+  } else {
+    // 가장 최근 지난 금요일 16:00:00 KST
+    const daysBack = dayKst === 5 ? 7 : daysSinceFri;
+    const fridayKst = new Date(nowKstMs - daysBack * 86400000);
+    endFri = new Date(Date.UTC(
+      fridayKst.getUTCFullYear(), fridayKst.getUTCMonth(), fridayKst.getUTCDate(),
+      16 - 9, 0, 0, 0  // KST 16:00 = UTC 07:00
+    ));
+  }
+
+  // startFri = endFri - 7일 + 1초
+  const startFri = new Date(endFri.getTime() - 7 * 86400000 + 1000);
+
+  // label 생성 (KST 표시)
+  const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+  function kstLabel(d, includeTime) {
+    const kd = new Date(d.getTime() + KST_OFFSET_MS);
+    const y  = kd.getUTCFullYear();
+    const mo = String(kd.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(kd.getUTCDate()).padStart(2, "0");
+    const day = DAY_NAMES[kd.getUTCDay()];
+    const hh  = String(kd.getUTCHours()).padStart(2, "0");
+    const mm  = String(kd.getUTCMinutes()).padStart(2, "0");
+    const ss  = String(kd.getUTCSeconds()).padStart(2, "0");
+    return `${y}-${mo}-${dd} (${day}) ${hh}:${mm}:${ss}`;
+  }
+  const label = `${kstLabel(startFri)} ~ ${kstLabel(endFri)}`;
+
+  return { start: startFri, end: endFri, label };
+}
+
+function isInWeeklyRange(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const { start, end } = getWeeklyReportRange();
+  return d >= start && d <= end;
+}
 
 function filteredCohorts() {
   if (STATE.source === "all") return STATE.cohortsBySource;
@@ -2563,6 +2706,417 @@ function renderRoleBadge() {
 }
 
 // ══════════════════════════════════════════════
+//  주간 보고서 — Task C
+// ══════════════════════════════════════════════
+function computeWeeklyCohort() {
+  const range = getWeeklyReportRange();
+  const dealEntryKey  = "거래 준비(세일즈 파이프라인)로 진입한 날짜";
+  const leadEntryKey  = "거래 준비(리드 파이프라인)로 진입한 날짜";
+
+  const filteredDeals = STATE.rawDeals.filter(d => {
+    const v = d[dealEntryKey];
+    if (!v) return false;
+    const t = new Date(v);
+    return t >= range.start && t <= range.end;
+  });
+  const filteredLeads = STATE.rawLeads.filter(d => {
+    const v = d[leadEntryKey];
+    if (!v) return false;
+    const t = new Date(v);
+    return t >= range.start && t <= range.end;
+  });
+
+  // 채널별 집계
+  const channelMap = {}; // channel → { orgIds: Set, dealCount, wonCount, leadCount }
+  for (const deal of filteredDeals) {
+    const src = detectDealSource(deal);
+    const ch  = src ? topLevelOf(src) : "(미분류)";
+    if (!channelMap[ch]) channelMap[ch] = { orgIds: new Set(), dealCount: 0, wonCount: 0 };
+    const orgId = String(deal.organizationId || deal["회사 ID"] || deal["회사id"] || "");
+    if (orgId) channelMap[ch].orgIds.add(orgId);
+    channelMap[ch].dealCount++;
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    if (cur === "계약 완료" || cur === "자금집행 완료" || cur === "결제 완료") channelMap[ch].wonCount++;
+  }
+
+  // 리드 집계
+  const leadChannelMap = {};
+  for (const lead of filteredLeads) {
+    const src = detectDealSource(lead);
+    const ch  = src ? topLevelOf(src) : "(미분류)";
+    leadChannelMap[ch] = (leadChannelMap[ch] || 0) + 1;
+  }
+
+  const rows = Object.entries(channelMap).map(([ch, v]) => ({
+    channel:   ch,
+    inflow:    v.orgIds.size,
+    dealConv:  v.dealCount,
+    won:       v.wonCount,
+    leadConv:  leadChannelMap[ch] || 0
+  })).sort((a, b) => b.dealConv - a.dealConv);
+
+  return { range, rows };
+}
+
+function renderWeeklyCohort(data) {
+  const wrap = $("weekly-cohort-wrap");
+  if (!wrap) return;
+  if (!data || !data.rows.length) {
+    wrap.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">이번 주 기간 내 딜 진입 없음</div>`;
+    return;
+  }
+
+  const totals = data.rows.reduce((a, r) => ({
+    inflow:   a.inflow   + r.inflow,
+    dealConv: a.dealConv + r.dealConv,
+    won:      a.won      + r.won,
+    leadConv: a.leadConv + r.leadConv
+  }), { inflow: 0, dealConv: 0, won: 0, leadConv: 0 });
+
+  const rowsHtml = data.rows.map(r => `<tr>
+    <td>${r.channel}</td>
+    <td style="text-align:right">${fmt(r.inflow)}</td>
+    <td style="text-align:right">${fmt(r.dealConv)}</td>
+    <td style="text-align:right">${fmt(r.won)}</td>
+    <td style="text-align:right">${fmt(r.leadConv)}</td>
+  </tr>`).join("");
+
+  wrap.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr>
+      <th style="text-align:left;padding:9px 14px;color:var(--fg-4);font-size:11px;font-weight:700;background:var(--bg-2)">채널</th>
+      <th style="text-align:right;padding:9px 14px;color:var(--fg-4);font-size:11px;font-weight:700;background:var(--bg-2)">유입</th>
+      <th style="text-align:right;padding:9px 14px;color:var(--fg-4);font-size:11px;font-weight:700;background:var(--bg-2)">딜전환</th>
+      <th style="text-align:right;padding:9px 14px;color:var(--fg-4);font-size:11px;font-weight:700;background:var(--bg-2)">계약완료</th>
+      <th style="text-align:right;padding:9px 14px;color:var(--fg-4);font-size:11px;font-weight:700;background:var(--bg-2)">리드전환</th>
+    </tr></thead>
+    <tbody>
+      ${rowsHtml}
+      <tr style="font-weight:700;background:var(--bg-2)">
+        <td style="padding:9px 14px">합계</td>
+        <td style="text-align:right;padding:9px 14px">${fmt(totals.inflow)}</td>
+        <td style="text-align:right;padding:9px 14px">${fmt(totals.dealConv)}</td>
+        <td style="text-align:right;padding:9px 14px">${fmt(totals.won)}</td>
+        <td style="text-align:right;padding:9px 14px">${fmt(totals.leadConv)}</td>
+      </tr>
+    </tbody>
+  </table>`;
+}
+
+// ══════════════════════════════════════════════
+//  주간 보고서 — Task D: Activity API
+// ══════════════════════════════════════════════
+async function salesmapGetAllActivities() {
+  try {
+    const data = await salesmapGet('/v2/activity?limit=100');
+    return data?.items || data?.data || data?.list || [];
+  } catch(e) {
+    console.warn('activity API unavailable', e);
+    return null;
+  }
+}
+
+async function salesmapGetAllNotes() {
+  try {
+    const data = await salesmapGet('/v2/note?limit=100');
+    return data?.items || data?.data || data?.list || [];
+  } catch(e) {
+    console.warn('note API unavailable', e);
+    return null;
+  }
+}
+
+async function salesmapGetAllTasks() {
+  try {
+    const data = await salesmapGet('/v2/task?limit=100');
+    return data?.items || data?.data || data?.list || [];
+  } catch(e) {
+    console.warn('task API unavailable', e);
+    return null;
+  }
+}
+
+function computeWeeklyActivity(activities, notes, tasks) {
+  const { start, end } = getWeeklyReportRange();
+
+  // DB 생성: rawOrgs 중 생성 날짜가 기간 내인 것
+  const newOrgs = STATE.rawOrgs.filter(org => {
+    const createdAt = org.createdAt || org["created_at"] || org["생성일"] || org["생성 날짜"] || null;
+    if (!createdAt) return false;
+    const t = new Date(createdAt);
+    return t >= start && t <= end;
+  });
+  const newLeads = STATE.rawLeads.filter(lead => {
+    const createdAt = lead.createdAt || lead["created_at"] || lead["생성일"] || null;
+    if (!createdAt) return false;
+    const t = new Date(createdAt);
+    return t >= start && t <= end;
+  });
+
+  // 접촉 집계 (activities가 있는 경우)
+  let contact = null;
+  if (activities !== null) {
+    const inRange = activities.filter(a => {
+      const at = a.createdAt || a["created_at"] || a["date"] || a["날짜"] || null;
+      if (!at) return false;
+      const t = new Date(at);
+      return t >= start && t <= end;
+    });
+    contact = { total: inRange.length, inbound: 0, outbound: 0, network: 0, other: 0 };
+    for (const a of inRange) {
+      const type = (a.type || a["유형"] || a["활동유형"] || "").toLowerCase();
+      if (type.includes("inbound") || type.includes("인바운드")) contact.inbound++;
+      else if (type.includes("outbound") || type.includes("아웃바운드")) contact.outbound++;
+      else if (type.includes("network") || type.includes("네트워크")) contact.network++;
+      else contact.other++;
+    }
+  }
+
+  // 상담: notes 중 기간 내 + 상담 관련
+  let consult = null;
+  if (notes !== null) {
+    consult = notes.filter(n => {
+      const at = n.createdAt || n["created_at"] || n["date"] || null;
+      if (!at) return false;
+      const t = new Date(at);
+      if (t < start || t > end) return false;
+      const content = (n.content || n["내용"] || n["title"] || "").toLowerCase();
+      return content.includes("상담") || content.includes("consult") || (n.type || "").includes("상담");
+    }).length;
+  }
+
+  // 심사: notes 중 기간 내 + 심사 관련
+  let review = null;
+  if (notes !== null) {
+    review = notes.filter(n => {
+      const at = n.createdAt || n["created_at"] || n["date"] || null;
+      if (!at) return false;
+      const t = new Date(at);
+      if (t < start || t > end) return false;
+      const content = (n.content || n["내용"] || n["title"] || "").toLowerCase();
+      return content.includes("심사") || content.includes("review") || (n.type || "").includes("심사");
+    }).length;
+  }
+
+  return {
+    dbCreated: { orgs: newOrgs.length, leads: newLeads.length },
+    contact,
+    consult,
+    review
+  };
+}
+
+function renderWeeklyActivity(data) {
+  const wrap = $("weekly-activity-wrap");
+  if (!wrap) return;
+
+  const NA = `<span style="color:var(--fg-4);font-style:italic">API 미지원 — 수동 확인 필요</span>`;
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px">`;
+
+  // DB 생성
+  html += `<div style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--line-1)">
+    <div style="font-size:11px;font-weight:700;color:var(--fg-4);letter-spacing:.04em;margin-bottom:8px">DB 생성</div>
+    <div style="display:flex;gap:16px">
+      <div>
+        <div style="font-size:22px;font-weight:800;color:var(--fg-1);font-family:var(--font-num)">${fmt(data.dbCreated.orgs)}</div>
+        <div style="font-size:11px;color:var(--fg-4)">신규 조직</div>
+      </div>
+      <div>
+        <div style="font-size:22px;font-weight:800;color:var(--fg-1);font-family:var(--font-num)">${fmt(data.dbCreated.leads)}</div>
+        <div style="font-size:11px;color:var(--fg-4)">신규 리드</div>
+      </div>
+    </div>
+  </div>`;
+
+  // 접촉
+  html += `<div style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--line-1)">
+    <div style="font-size:11px;font-weight:700;color:var(--fg-4);letter-spacing:.04em;margin-bottom:8px">접촉</div>`;
+  if (data.contact === null) {
+    html += `<div>${NA}</div>`;
+  } else {
+    html += `<div style="font-size:22px;font-weight:800;color:var(--fg-1);font-family:var(--font-num)">${fmt(data.contact.total)}</div>
+    <div style="font-size:11px;color:var(--fg-4);margin-top:4px">
+      인바운드 ${data.contact.inbound} / 아웃바운드 ${data.contact.outbound} / 네트워크 ${data.contact.network}
+    </div>`;
+  }
+  html += `</div>`;
+
+  // 상담
+  html += `<div style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--line-1)">
+    <div style="font-size:11px;font-weight:700;color:var(--fg-4);letter-spacing:.04em;margin-bottom:8px">상담</div>`;
+  if (data.consult === null) {
+    html += `<div>${NA}</div>`;
+  } else {
+    html += `<div style="font-size:22px;font-weight:800;color:var(--fg-1);font-family:var(--font-num)">${fmt(data.consult)}</div>
+    <div style="font-size:11px;color:var(--fg-4)">상담 노트 수</div>`;
+  }
+  html += `</div>`;
+
+  // 심사
+  html += `<div style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--line-1)">
+    <div style="font-size:11px;font-weight:700;color:var(--fg-4);letter-spacing:.04em;margin-bottom:8px">심사</div>`;
+  if (data.review === null) {
+    html += `<div>${NA}</div>`;
+  } else {
+    html += `<div style="font-size:22px;font-weight:800;color:var(--fg-1);font-family:var(--font-num)">${fmt(data.review)}</div>
+    <div style="font-size:11px;color:var(--fg-4)">심사 노트 수</div>`;
+  }
+  html += `</div>`;
+
+  html += `</div>`;
+  wrap.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════
+//  주간 보고서 — Task E: renderWeeklyReport + Slack
+// ══════════════════════════════════════════════
+async function renderWeeklyReport() {
+  const range = getWeeklyReportRange();
+  const rangeLabel = $("weekly-range-label");
+  const periodText  = $("weekly-period-text");
+  if (rangeLabel) rangeLabel.textContent = range.label;
+  if (periodText)  periodText.textContent = range.label;
+
+  const cohortData = computeWeeklyCohort();
+  renderWeeklyCohort(cohortData);
+
+  const [activities, notes, tasks] = await Promise.all([
+    salesmapGetAllActivities(),
+    salesmapGetAllNotes(),
+    salesmapGetAllTasks()
+  ]);
+  const actData = computeWeeklyActivity(activities, notes, tasks);
+  STATE.weeklyActivity = actData;
+  renderWeeklyActivity(actData);
+}
+
+function generateWeeklyMd(cohortData, actData) {
+  const range = cohortData?.range || getWeeklyReportRange();
+  const ts = now();
+  let md = `# 플로우페이 주간 보고서\n\n`;
+  md += `- **보고 기간**: ${range.label}\n`;
+  md += `- **작성 일시**: ${ts}\n\n---\n\n`;
+  md += `## 유입 채널별 코호트\n\n`;
+  if (cohortData?.rows?.length) {
+    md += `| 채널 | 유입 | 딜전환 | 계약완료 | 리드전환 |\n`;
+    md += `|------|------|--------|----------|----------|\n`;
+    for (const r of cohortData.rows) {
+      md += `| ${r.channel} | ${r.inflow} | ${r.dealConv} | ${r.won} | ${r.leadConv} |\n`;
+    }
+  } else {
+    md += `_이번 주 데이터 없음_\n`;
+  }
+  md += `\n---\n\n## 세일즈 활동\n\n`;
+  if (actData) {
+    md += `| 항목 | 내용 |\n|------|------|\n`;
+    md += `| DB 생성 (조직) | ${actData.dbCreated.orgs}건 |\n`;
+    md += `| DB 생성 (리드) | ${actData.dbCreated.leads}건 |\n`;
+    if (actData.contact !== null) {
+      md += `| 접촉 (인바운드) | ${actData.contact.inbound}건 |\n`;
+      md += `| 접촉 (아웃바운드) | ${actData.contact.outbound}건 |\n`;
+      md += `| 접촉 (네트워크) | ${actData.contact.network}건 |\n`;
+    } else {
+      md += `| 접촉 | API 미지원 — 수동 확인 필요 |\n`;
+    }
+    md += `| 상담 | ${actData.consult !== null ? actData.consult + "건" : "API 미지원"} |\n`;
+    md += `| 심사 | ${actData.review  !== null ? actData.review  + "건" : "API 미지원"} |\n`;
+  } else {
+    md += `_데이터 없음_\n`;
+  }
+  return md;
+}
+
+function buildWeeklySlackMsg(cohortData, actData) {
+  const user   = STATE.settings.slackUser || "@예충희";
+  const uid    = STATE.settings.slackUserId;
+  const mention = uid ? `<@${uid}>` : user;
+  const range  = cohortData?.range || getWeeklyReportRange();
+
+  let msg = `[플로우페이 주간 보고서]
+수신: ${mention}
+기간: ${range.label}
+작성: ${now()}
+
+📊 유입 채널별 코호트`;
+
+  if (cohortData?.rows?.length) {
+    msg += `\n채널 | 유입 | 딜전환 | 계약완료 | 리드전환`;
+    for (const r of cohortData.rows) {
+      msg += `\n${r.channel} | ${r.inflow} | ${r.dealConv} | ${r.won} | ${r.leadConv}`;
+    }
+  } else {
+    msg += `\n데이터 없음`;
+  }
+
+  msg += `\n\n📋 세일즈 활동`;
+  if (actData) {
+    msg += `\nDB 생성: 조직 ${actData.dbCreated.orgs}건 / 리드 ${actData.dbCreated.leads}건`;
+    msg += `\n접촉: ${actData.contact !== null ? actData.contact.total + "건 (인바운드 " + actData.contact.inbound + " / 아웃바운드 " + actData.contact.outbound + " / 네트워크 " + actData.contact.network + ")" : "API 미지원"}`;
+    msg += `\n상담: ${actData.consult !== null ? actData.consult + "건" : "API 미지원"}`;
+    msg += `\n심사: ${actData.review  !== null ? actData.review  + "건" : "API 미지원"}`;
+  } else {
+    msg += `\n데이터 없음`;
+  }
+
+  return msg;
+}
+
+// ══════════════════════════════════════════════
+//  보고서 아카이브 (localStorage)
+// ══════════════════════════════════════════════
+const REPORTS_KEY = "fp_saved_reports";
+
+function loadSavedReports() {
+  try { return JSON.parse(localStorage.getItem(REPORTS_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveReport(report) {
+  const list = loadSavedReports();
+  list.unshift(report);
+  if (list.length > 52) list.length = 52;
+  localStorage.setItem(REPORTS_KEY, JSON.stringify(list));
+}
+
+function deleteReport(id) {
+  const list = loadSavedReports().filter(r => r.id !== id);
+  localStorage.setItem(REPORTS_KEY, JSON.stringify(list));
+  renderReportsList();
+}
+
+function renderReportsList() {
+  const wrap = $("reports-list-wrap");
+  if (!wrap) return;
+  const list = loadSavedReports();
+  if (!list.length) {
+    wrap.innerHTML = `<div style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div>`;
+    return;
+  }
+  wrap.innerHTML = list.map(r => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line-1)">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--fg-1)">${r.title}</div>
+        <div style="font-size:12px;color:var(--fg-4);margin-top:2px">${r.savedAt} · 코호트 ${r.cohortRows}개 채널</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="downloadReportMd('${r.id}')" class="ctrl" style="font-size:12px;padding:2px 10px;height:28px">📥 MD</button>
+        <button onclick="deleteReport('${r.id}')" class="ctrl" style="font-size:12px;padding:2px 10px;height:28px;color:var(--danger-500)">삭제</button>
+      </div>
+    </div>`).join('');
+}
+
+function downloadReportMd(id) {
+  const report = loadSavedReports().find(r => r.id === id);
+  if (!report) return;
+  const blob = new Blob([report.md], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${report.filename}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ══════════════════════════════════════════════
 //  전체 렌더
 // ══════════════════════════════════════════════
 function renderAll() {
@@ -2612,7 +3166,56 @@ document.querySelectorAll(".nav-btn[data-view]").forEach(btn => {
     document.querySelectorAll(".section").forEach(s => s.classList.remove("active"));
     btn.classList.add("active");
     $("view-" + btn.dataset.view).classList.add("active");
+    if (btn.dataset.view === "weekly") {
+      renderWeeklyReport();
+    }
+    if (btn.dataset.view === "reports") {
+      renderReportsList();
+    }
   });
+});
+
+// 주간 보고서 새로고침 버튼
+$("btn-weekly-refresh")?.addEventListener("click", () => { renderWeeklyReport(); });
+
+$("btn-weekly-save")?.addEventListener("click", () => {
+  const cohortData = computeWeeklyCohort();
+  const actData = STATE.weeklyActivity;
+  const range = cohortData?.range || getWeeklyReportRange();
+  const md = generateWeeklyMd(cohortData, actData);
+  const dateStr = new Date().toISOString().slice(0,10);
+  const report = {
+    id: Date.now().toString(),
+    title: `주간 보고서 ${range.label}`,
+    savedAt: now(),
+    filename: `weekly-report-${dateStr}`,
+    cohortRows: cohortData?.rows?.length || 0,
+    md
+  };
+  saveReport(report);
+  toast("보고서가 저장되었습니다.");
+});
+
+$("btn-weekly-md")?.addEventListener("click", () => {
+  const cohortData = computeWeeklyCohort();
+  const actData = STATE.weeklyActivity;
+  const md = generateWeeklyMd(cohortData, actData);
+  const dateStr = new Date().toISOString().slice(0,10);
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `weekly-report-${dateStr}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("MD 파일을 다운로드합니다.");
+});
+
+$("btn-reports-clear")?.addEventListener("click", () => {
+  if (confirm("저장된 보고서를 모두 삭제할까요?")) {
+    localStorage.removeItem(REPORTS_KEY);
+    renderReportsList();
+    toast("보고서 목록을 삭제했습니다.");
+  }
 });
 
 // 컨트롤
@@ -3829,6 +4432,7 @@ async function loadRealData() {
       }
       STATE.orgChannelCount = orgChannelCount; // 진단 데이터 저장
     }
+    STATE.rawOrgs = orgs;
     STATE.rawLeads = leads;
     if (deals.length) {
       computeFromDeals(deals, leads);
