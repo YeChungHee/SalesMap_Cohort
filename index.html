@@ -1356,8 +1356,10 @@ function svgBar(data, w, h, color) {
         <line x1="${(parseFloat(cx)-parseFloat(capW)/2).toFixed(1)}" y1="${yMin}" x2="${(parseFloat(cx)+parseFloat(capW)/2).toFixed(1)}" y2="${yMin}" stroke="${fill}" stroke-width="1.5" opacity=".7"/>
         <line x1="${(parseFloat(cx)-parseFloat(capW)/2).toFixed(1)}" y1="${yMax}" x2="${(parseFloat(cx)+parseFloat(capW)/2).toFixed(1)}" y2="${yMax}" stroke="${fill}" stroke-width="1.5" opacity=".7"/>`;
     }
+    const countLabel = d.v > 0 ? `<text x="${(x + bw/2).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" font-size="9" fill="${d.dashed ? '#7c3aed' : '#475569'}" opacity="${d.dashed ? '0.8' : '1'}">${d.dashed && d.range && d.range.min !== d.range.max ? `${d.range.min}~${d.range.max}` : d.v}</text>` : "";
     return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${fill}" opacity="${opacity}"${strokeAttr}/>
       ${rangeEl}
+      ${countLabel}
       <text x="${(x + bw/2).toFixed(1)}" y="${(h - 4)}" text-anchor="middle" font-size="10" fill="#64748b">${d.l}</text>`;
   }).join("");
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
@@ -1739,6 +1741,9 @@ function renderRetention() {
     ? ` · 재구매 주기 P50 ${forecast.cycleP50Days}일`
     : "";
   const detailText = `추세 ${forecast.trendMin}건 / 주기 기반 후보 ${forecast.cycleCandidates}건`;
+  const namesHtml = forecast.cycleCandidateNames?.length
+    ? `<div style="margin-top:6px;font-size:11px;color:var(--muted)">주기 기반 후보 업체: ${forecast.cycleCandidateNames.map(n => `<span style="display:inline-block;background:rgba(124,58,237,.1);color:#7c3aed;border-radius:4px;padding:1px 6px;margin:2px 2px 0 0;font-size:11px">${n}</span>`).join("")}</div>`
+    : "";
 
   el.innerHTML = `
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">재구매(리텐션 + 재활성화) 건수</div>
@@ -1748,7 +1753,8 @@ function renderRetention() {
       <span><span style="display:inline-block;width:10px;height:10px;background:#7c3aed;opacity:.35;border:1px dashed #7c3aed;border-radius:2px;margin-right:4px;vertical-align:middle"></span>${forecast.month.slice(0,7)} 예측</span>
     </div>
     <div style="margin-top:6px;font-size:11px;color:#7c3aed">* ${forecast.month} 예측: ${rangeText}${cycleText}</div>
-    <div style="margin-top:2px;font-size:10px;color:var(--muted)">${detailText}</div>`;
+    <div style="margin-top:2px;font-size:10px;color:var(--muted)">${detailText}</div>
+    ${namesHtml}`;
 }
 
 // 파이프라인 KPI 카드
@@ -3084,7 +3090,8 @@ function computeJuneForecast(allDeals, trendData) {
 
   // ── 방법 A: 주기 기반 예측 ──
   // 1) 완료 딜 수집 (거래일 있는 PAID_STAGES 딜)
-  const completedByOrg = {}; // orgId → sorted ts array
+  const completedByOrg = {}; // orgId → { tsList, name }
+  const orgNameMap = {};    // orgId → 표시명 캐시
   for (const d of allDeals) {
     const cur = detectCurrentStage(d, "세일즈 파이프라인");
     if (!PAID_STAGES.includes(cur)) continue;
@@ -3097,6 +3104,9 @@ function computeJuneForecast(allDeals, trendData) {
     const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
     if (!completedByOrg[orgId]) completedByOrg[orgId] = [];
     completedByOrg[orgId].push(ts);
+    if (!orgNameMap[orgId]) {
+      orgNameMap[orgId] = STATE.orgMap?.[orgId]?.name || d["회사"] || d["organizationName"] || d["이름"] || orgId;
+    }
   }
   for (const k of Object.keys(completedByOrg)) completedByOrg[k].sort((a, b) => a - b);
 
@@ -3114,7 +3124,8 @@ function computeJuneForecast(allDeals, trendData) {
 
   // 3) 예측 후보: 마지막 거래일 + P50 ≈ forecastMonth 범위 업체
   let cycleCandidates = 0;
-  const cycleCandidateOrgs = [];
+  const cycleCandidateOrgs = [];   // orgId 목록
+  const cycleCandidateNames = [];  // 업체명 목록
   if (cycleP50Ms) {
     for (const [orgId, tsList] of Object.entries(completedByOrg)) {
       const lastTs = tsList[tsList.length - 1];
@@ -3122,6 +3133,7 @@ function computeJuneForecast(allDeals, trendData) {
       if (expectedNext >= forecastStart && expectedNext <= forecastEnd) {
         cycleCandidates++;
         cycleCandidateOrgs.push(orgId);
+        cycleCandidateNames.push(orgNameMap[orgId] || orgId);
       }
     }
   }
@@ -3137,6 +3149,7 @@ function computeJuneForecast(allDeals, trendData) {
     cycleP50Days,          // 주기 P50 (일) — 표시용
     cycleCandidates,       // 주기 기반 예측 후보 수
     cycleCandidateOrgs,    // 예측 후보 업체 ID 목록
+    cycleCandidateNames,   // 예측 후보 업체명 목록
     trendMin,              // 트렌드 기반 예측 (이동평균)
     min: Math.min(trendMin, cycleCandidates),
     max: Math.max(trendMin, cycleCandidates)
