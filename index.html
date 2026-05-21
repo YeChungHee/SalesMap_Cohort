@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.0</title>
+<title>플로우페이 코호트 대시보드 v2.5.1</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -647,7 +647,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.5.0</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.5.1</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -663,6 +663,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.1",
+    date: "2026-05-21",
+    label: "코호트 전환 현황 데이터 오류 수정 — 고객 유형·리드 전환 실계산",
+    items: [
+      { type:"fix", text:"고객 유형 '100% 신규' 하드코딩 버그 수정 — parseDealPurchaseType()으로 딜 제목 (N) 접두사 기반 신규/반복 실분류" },
+      { type:"fix", text:"리드 전환 '100%' 하드코딩 버그 수정 — 리드 파이프라인 데이터에서 소스별 실집계 (leadsSourceMap)" },
+      { type:"fix", text:"소스 없는 딜(넘버링 미기입)은 신규로 간주 처리" }
+    ]
+  },
   {
     version: "2.5.0",
     date: "2026-05-21",
@@ -3325,7 +3335,7 @@ function computeFromDeals(deals, leads = []) {
   const dealWonCycleSec = [];       // 성사 딜 전체 체류 합산 (영업 사이클)
   const dealWonCycleSecBySource = {}; // 소스별 체류 합산
   const monthlyMap = {};            // YYYY-MM → { input, leads, deals, paid }
-  const sourceMap  = {};            // source → { input, deals, paid }
+  const sourceMap  = {};            // source → { input, deals, paid, new_, repeat }
 
   for (const deal of deals) {
     const cur = detectCurrentStage(deal, "세일즈 파이프라인");
@@ -3333,9 +3343,12 @@ function computeFromDeals(deals, leads = []) {
 
     // 소스 집계
     const src = detectDealSource(deal);
+    const purchaseType = parseDealPurchaseType(deal); // null | "New" | "Repeat"
     if (src) {
-      if (!sourceMap[src]) sourceMap[src] = { input:0, deals:0, paid:0 };
+      if (!sourceMap[src]) sourceMap[src] = { input:0, deals:0, paid:0, new_:0, repeat:0, leads:0 };
       sourceMap[src].input++;
+      if (purchaseType === "Repeat") sourceMap[src].repeat++;
+      else sourceMap[src].new_++; // null(넘버링 없음) → 신규로 처리
       if (cur && wonStages.includes(cur))  sourceMap[src].deals++;
       if (cur && cur === "결제 완료")      sourceMap[src].paid++;
     }
@@ -3371,9 +3384,12 @@ function computeFromDeals(deals, leads = []) {
   // 리드 파이프라인 집계 (별도 리드 목록 사용)
   let totalLeads = leads.length;
   let sqlLeads = 0;
+  const leadsSourceMap = {}; // source → 리드 수
   for (const lead of leads) {
     const cur = detectCurrentStage(lead, "리드 파이프라인");
     if (cur && sqlStages.includes(cur)) sqlLeads++;
+    const lsrc = detectDealSource(lead);
+    if (lsrc) leadsSourceMap[lsrc] = (leadsSourceMap[lsrc] || 0) + 1;
   }
   // fallback: leads not available, count from deals that have lead stage keys
   if (!leads.length) {
@@ -3410,16 +3426,24 @@ function computeFromDeals(deals, leads = []) {
   // 소스별 코호트
   if (Object.keys(sourceMap).length) {
     STATE.cohortsBySource = Object.entries(sourceMap).map(([source, v]) => ({
-      source, label: source, input: v.input, leads: v.input, deals: v.deals, paid: v.paid,
-      new_: v.input, retention: 0, reactivated: 0
+      source, label: source,
+      input: v.input,
+      leads: leadsSourceMap[source] || 0,  // 실제 리드 수 (없으면 0)
+      deals: v.deals,
+      paid:  v.paid,
+      new_: v.new_,
+      retention: v.repeat,
+      reactivated: 0
     }));
   } else {
     // 소스 필드 없을 때 — "전체" 단일 행으로 집계 표시
+    const totalNew    = deals.filter(d => parseDealPurchaseType(d) !== "Repeat").length;
+    const totalRepeat = deals.filter(d => parseDealPurchaseType(d) === "Repeat").length;
     STATE.cohortsBySource = [{
       source: "전체", label: "전체 (소스 미분류)",
-      input: totalDeals, leads: totalDeals,
+      input: totalDeals, leads: totalLeads,
       deals: wonDeals, paid: deals.filter(d => detectCurrentStage(d, "세일즈 파이프라인") === "결제 완료").length,
-      new_: totalDeals, retention: 0, reactivated: 0
+      new_: totalNew, retention: totalRepeat, reactivated: 0
     }];
   }
 
