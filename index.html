@@ -2838,13 +2838,25 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
   for (const row of result) {
     const range = getFunnelDateRange('monthly', row.month);
     if (!range) continue;
-    const orgSeenInPeriod = new Set();
+
+    // 월 내 업체별 총 건수 사전 집계 — 다건 시 "(1)", "(2)" 접미사용
+    const orgMonthTotal = {};
+    for (const d of wonDeals) {
+      const t = new Date(d.enteredTs);
+      if (t < range.from || t > range.to) continue;
+      orgMonthTotal[d.orgId] = (orgMonthTotal[d.orgId] || 0) + 1;
+    }
+    const orgSeenCount = {};  // 해당 월 내 몇 번째 건인지 추적
 
     for (const d of wonDeals) {
       const t = new Date(d.enteredTs);
       if (t < range.from || t > range.to) continue;
-      if (orgSeenInPeriod.has(d.orgId)) continue;
-      orgSeenInPeriod.add(d.orgId);
+
+      // 다건 업체 → "업체명(1)", "업체명(2)" 표시
+      orgSeenCount[d.orgId] = (orgSeenCount[d.orgId] || 0) + 1;
+      const displayName = orgMonthTotal[d.orgId] > 1
+        ? `${d.orgName}(${orgSeenCount[d.orgId]})`
+        : d.orgName;
 
       let cat;
       if (d.purchaseType === "New") {
@@ -2863,7 +2875,7 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
         cat = "unclassified";
       }
       row[cat].count++;
-      row[cat].orgs.push(d.orgName);
+      row[cat].orgs.push(displayName);
     }
   }
   return result;
