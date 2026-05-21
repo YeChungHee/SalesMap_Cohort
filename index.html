@@ -664,6 +664,18 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.4.9",
+    date: "2026-05-21",
+    label: "6월 리텐션 예측 — 재구매 주기 P50 기반 + 트렌드 기반 범위 예측",
+    items: [
+      { type:"feat", text:"computeJuneForecast() 추가 — Repeat 업체 거래일 간격 P50 측정 → 마지막 거래일+P50 ≈ 6월인 업체 집계" },
+      { type:"feat", text:"트렌드 기반 예측(최근 3개월 이동평균) + 주기 기반 예측(사이클 후보 카운트) 범위(min~max)로 표시" },
+      { type:"feat", text:"svgBar() 함수 per-bar 색상·점선·에러바 지원으로 확장 (기존 호출부 영향 없음)" },
+      { type:"feat", text:"재구매 주기 P50(일) 캡션에 표시 — 영업팀이 재접촉 타이밍 판단에 활용 가능" },
+      { type:"feat", text:"LOST_STAGES 상수 추가" }
+    ]
+  },
+  {
     version: "2.4.8",
     date: "2026-05-21",
     label: "재활성화/리텐션 추이 — 월별 구매 유형 추이 소스 통일",
@@ -1329,7 +1341,23 @@ function svgBar(data, w, h, color) {
     const bh = Math.max((d.v / max) * (h - 20), 2);
     const x = i * (bw + 4);
     const y = h - 20 - bh;
-    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${color}" opacity=".85"/>
+    const fill = d.fill || color;
+    const opacity = d.opacity != null ? d.opacity : 0.85;
+    const strokeAttr = d.dashed ? ` stroke="${fill}" stroke-dasharray="3,2" stroke-width="1.5"` : "";
+    let rangeEl = "";
+    if (d.range && d.range.max > 0) {
+      const rMinH = Math.max((d.range.min / max) * (h - 20), 1);
+      const rMaxH = Math.max((d.range.max / max) * (h - 20), 1);
+      const cx = (x + bw / 2).toFixed(1);
+      const yMin = (h - 20 - rMinH).toFixed(1);
+      const yMax = (h - 20 - rMaxH).toFixed(1);
+      const capW = Math.min(bw * 0.4, 8).toFixed(1);
+      rangeEl = `<line x1="${cx}" y1="${yMin}" x2="${cx}" y2="${yMax}" stroke="${fill}" stroke-width="1.5" opacity=".7"/>
+        <line x1="${(parseFloat(cx)-parseFloat(capW)/2).toFixed(1)}" y1="${yMin}" x2="${(parseFloat(cx)+parseFloat(capW)/2).toFixed(1)}" y2="${yMin}" stroke="${fill}" stroke-width="1.5" opacity=".7"/>
+        <line x1="${(parseFloat(cx)-parseFloat(capW)/2).toFixed(1)}" y1="${yMax}" x2="${(parseFloat(cx)+parseFloat(capW)/2).toFixed(1)}" y2="${yMax}" stroke="${fill}" stroke-width="1.5" opacity=".7"/>`;
+    }
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${fill}" opacity="${opacity}"${strokeAttr}/>
+      ${rangeEl}
       <text x="${(x + bw/2).toFixed(1)}" y="${(h - 4)}" text-anchor="middle" font-size="10" fill="#64748b">${d.l}</text>`;
   }).join("");
   return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">${bars}</svg>`;
@@ -1675,7 +1703,6 @@ function renderRetention() {
     el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
     return;
   }
-  // 월별 구매 유형 추이와 동일 소스 사용
   if (!STATE.trendData?.length) {
     STATE.trendData = computeMonthlyPurchaseTypeTrend(STATE.rawDeals);
   }
@@ -1688,10 +1715,40 @@ function renderRetention() {
     const total = (row.retention?.count ?? 0) + (row.reactivated?.count ?? 0);
     return { l: (row.month || "").slice(5), v: total };
   });
+
+  // 6월 예측 계산
+  const forecast = computeJuneForecast(STATE.rawDeals, monthly);
+  const fcLabel = forecast.month.slice(5) + "*";
+  const fcMid = forecast.min === forecast.max
+    ? forecast.min
+    : Math.round((forecast.min + forecast.max) / 2);
+  data.push({
+    l: fcLabel,
+    v: fcMid,
+    fill: "#7c3aed",
+    opacity: 0.35,
+    dashed: true,
+    range: { min: forecast.min, max: forecast.max }
+  });
+
+  // 예측 캡션 텍스트
+  const rangeText = forecast.min === forecast.max
+    ? `${forecast.min}건`
+    : `${forecast.min} ~ ${forecast.max}건`;
+  const cycleText = forecast.cycleP50Days
+    ? ` · 재구매 주기 P50 ${forecast.cycleP50Days}일`
+    : "";
+  const detailText = `추세 ${forecast.trendMin}건 / 주기 기반 후보 ${forecast.cycleCandidates}건`;
+
   el.innerHTML = `
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">재구매(리텐션 + 재활성화) 건수</div>
     ${svgBar(data, 340, 100, "#7c3aed")}
-    <div style="margin-top:8px;font-size:12px;color:var(--muted)">월별 추이</div>`;
+    <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted)">
+      <span><span style="display:inline-block;width:10px;height:10px;background:#7c3aed;border-radius:2px;opacity:.85;margin-right:4px;vertical-align:middle"></span>실적</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:#7c3aed;opacity:.35;border:1px dashed #7c3aed;border-radius:2px;margin-right:4px;vertical-align:middle"></span>${forecast.month.slice(0,7)} 예측</span>
+    </div>
+    <div style="margin-top:6px;font-size:11px;color:#7c3aed">* ${forecast.month} 예측: ${rangeText}${cycleText}</div>
+    <div style="margin-top:2px;font-size:10px;color:var(--muted)">${detailText}</div>`;
 }
 
 // 파이프라인 KPI 카드
@@ -2854,6 +2911,7 @@ function parseDealPurchaseType(deal) {
 //  - 구매이력 = "Repeat" + 직전 거래일 ≤ 6개월 → 리텐션
 //  - 구매이력 = "Repeat" + 직전 거래일 > 6개월  → 재활성화
 const PAID_STAGES = ["결제 완료", "결제 지연", "자금집행 완료"];
+const LOST_STAGES = ["진행 거절","신청 취소","보류 서류/계약"];
 function computeCustomerTypeData(allDeals, periodType, periodValue) {
   // 결제 완료 / 결제 지연 단계 딜만 추출 — 거래일 기준
   const wonDeals = allDeals
@@ -3002,6 +3060,87 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
     }
   }
   return result;
+}
+
+// ── 6월 리텐션 예측 ──
+// 방법 A: 주기 기반 — 동일 업체의 거래일 간격 P50 측정 → 마지막 거래일+P50 ≈ 6월인 업체 카운트
+// 방법 B: 트렌드 기반 — 최근 3개월 리텐션+재활성화 이동평균
+function computeJuneForecast(allDeals, trendData) {
+  // 다음 달 계산 (동적 — 하드코딩 금지)
+  const lastMonth = trendData.length ? trendData[trendData.length - 1].month : null;
+  let forecastMonth;
+  if (lastMonth) {
+    const [y, m] = lastMonth.split("-").map(Number);
+    const nm = m === 12 ? 1 : m + 1;
+    const ny = m === 12 ? y + 1 : y;
+    forecastMonth = `${ny}-${String(nm).padStart(2, "0")}`;
+  } else {
+    const now = new Date();
+    forecastMonth = `${now.getFullYear()}-${String(now.getMonth() + 2).padStart(2, "0")}`;
+  }
+  const [fy, fm] = forecastMonth.split("-").map(Number);
+  const forecastStart = new Date(fy, fm - 1, 1).getTime();
+  const forecastEnd   = new Date(fy, fm, 0, 23, 59, 59).getTime(); // 월말
+
+  // ── 방법 A: 주기 기반 예측 ──
+  // 1) 완료 딜 수집 (거래일 있는 PAID_STAGES 딜)
+  const completedByOrg = {}; // orgId → sorted ts array
+  for (const d of allDeals) {
+    const cur = detectCurrentStage(d, "세일즈 파이프라인");
+    if (!PAID_STAGES.includes(cur)) continue;
+    const dateRaw = d["거래일"];
+    if (!dateRaw) continue;
+    const ts = new Date(dateRaw).getTime();
+    if (!ts || isNaN(ts)) continue;
+    const purchaseType = d["구매이력"] || parseDealPurchaseType(d) || null;
+    if (purchaseType !== "Repeat") continue;
+    const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
+    if (!completedByOrg[orgId]) completedByOrg[orgId] = [];
+    completedByOrg[orgId].push(ts);
+  }
+  for (const k of Object.keys(completedByOrg)) completedByOrg[k].sort((a, b) => a - b);
+
+  // 2) 사이클 간격 수집 (거래일[N] → 거래일[N+1])
+  const cycles = [];
+  for (const [, tsList] of Object.entries(completedByOrg)) {
+    for (let i = 1; i < tsList.length; i++) {
+      const gap = tsList[i] - tsList[i - 1];
+      if (gap > 0) cycles.push(gap);
+    }
+  }
+  const cycleP50Ms = cycles.length
+    ? [...cycles].sort((a, b) => a - b)[Math.floor(cycles.length * 0.5)] : null;
+  const cycleP50Days = cycleP50Ms ? Math.round(cycleP50Ms / 86400000) : null;
+
+  // 3) 예측 후보: 마지막 거래일 + P50 ≈ forecastMonth 범위 업체
+  let cycleCandidates = 0;
+  const cycleCandidateOrgs = [];
+  if (cycleP50Ms) {
+    for (const [orgId, tsList] of Object.entries(completedByOrg)) {
+      const lastTs = tsList[tsList.length - 1];
+      const expectedNext = lastTs + cycleP50Ms;
+      if (expectedNext >= forecastStart && expectedNext <= forecastEnd) {
+        cycleCandidates++;
+        cycleCandidateOrgs.push(orgId);
+      }
+    }
+  }
+
+  // ── 방법 B: 트렌드 기반 예측 (최근 3개월 이동 평균) ──
+  const recent = trendData.slice(-3);
+  const trendMin = recent.length
+    ? Math.round(recent.reduce((s, r) => s + (r.retention?.count ?? 0) + (r.reactivated?.count ?? 0), 0) / recent.length)
+    : 0;
+
+  return {
+    month: forecastMonth,
+    cycleP50Days,          // 주기 P50 (일) — 표시용
+    cycleCandidates,       // 주기 기반 예측 후보 수
+    cycleCandidateOrgs,    // 예측 후보 업체 ID 목록
+    trendMin,              // 트렌드 기반 예측 (이동평균)
+    min: Math.min(trendMin, cycleCandidates),
+    max: Math.max(trendMin, cycleCandidates)
+  };
 }
 
 // ── 월별 구매 유형 추이 렌더 (이벤트 위임 방식) ──
