@@ -354,7 +354,7 @@ tbody tr:hover td{background:var(--primary-50)}
           <div class="card-header">
             <h3>단계 체류 시간</h3>
             <div style="display:flex;align-items:center;gap:8px">
-              <span class="pill pill-blue">P50 / P75 / P90 (시간)</span>
+              <span class="pill pill-blue" style="cursor:pointer" onclick="showPctileHelp('ALL')" title="클릭하여 지표 설명 보기">P50 / P75 / P90 (시간) ℹ</span>
               <button class="btn" id="btn-refresh-velocity" onclick="handleRefreshVelocity()">API 새로고침</button>
               <span id="velocity-status" style="font-size:11px;color:var(--muted)"></span>
             </div>
@@ -663,6 +663,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.4.6",
+    date: "2026-05-21",
+    label: "4·5월 데이터 복원 + P50/P75/P90 팝업 개선",
+    items: [
+      { type:"fix",  text:"PAID_STAGES에 '자금집행 완료' 추가 — 해당 단계 딜도 월별 구매 유형 추이에 반영 (4·5월 공백 해소)" },
+      { type:"feat", text:"P50/P75/P90 pill 클릭 시 세 지표 전체 설명 팝업 표시 (닫기 버튼 포함)" }
+    ]
+  },
   {
     version: "2.4.5",
     date: "2026-05-21",
@@ -1713,20 +1722,40 @@ const PCTILE_HELP = {
   P90: { title:"P90 — 상위 10% 기준선", body:"전체 딜의 90%가 이 시간 이내에 해당 단계를 통과합니다.\n상위 10%의 느린 딜만 이 시간을 초과하며, 병목이나 리스크 딜을 식별하는 지표입니다." }
 };
 function showPctileHelp(metric) {
-  const info = PCTILE_HELP[metric];
-  if (!info) return;
   // 기존 팝업 제거
   const prev = document.getElementById("pctile-popup");
   if (prev) prev.remove();
   const overlay = document.createElement("div");
   overlay.id = "pctile-popup";
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9000;display:flex;align-items:center;justify-content:center";
-  overlay.innerHTML = `
-    <div style="background:var(--surface);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);padding:28px 32px;max-width:420px;width:90%;position:relative">
+
+  let bodyHtml;
+  if (metric === "ALL") {
+    // 전체 설명 팝업 (pill 클릭 시)
+    bodyHtml = `
+      <div style="font-size:16px;font-weight:700;margin-bottom:20px;color:var(--text)">P50 / P75 / P90 지표 안내</div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        ${["P50","P75","P90"].map(k => {
+          const info = PCTILE_HELP[k];
+          return `<div style="background:var(--bg);border-radius:8px;padding:14px 16px">
+            <div style="font-size:13px;font-weight:700;color:var(--accent);margin-bottom:6px">${info.title}</div>
+            <div style="font-size:13px;line-height:1.7;color:var(--fg-3);white-space:pre-line">${info.body}</div>
+          </div>`;
+        }).join("")}
+      </div>`;
+  } else {
+    const info = PCTILE_HELP[metric];
+    if (!info) return;
+    bodyHtml = `
       <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">${info.title}</div>
-      <div style="font-size:13px;line-height:1.7;color:var(--fg-3);white-space:pre-line">${info.body}</div>
+      <div style="font-size:13px;line-height:1.7;color:var(--fg-3);white-space:pre-line">${info.body}</div>`;
+  }
+
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);padding:28px 32px;max-width:460px;width:90%;position:relative">
+      ${bodyHtml}
       <button onclick="document.getElementById('pctile-popup').remove()"
-        style="margin-top:20px;padding:7px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">닫기</button>
+        style="margin-top:22px;padding:8px 24px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer;display:block;width:100%">닫기</button>
     </div>`;
   overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
@@ -2802,7 +2831,7 @@ function parseDealPurchaseType(deal) {
 //  - 구매이력 = "New"   → 신규
 //  - 구매이력 = "Repeat" + 직전 거래일 ≤ 6개월 → 리텐션
 //  - 구매이력 = "Repeat" + 직전 거래일 > 6개월  → 재활성화
-const PAID_STAGES = ["결제 완료", "결제 지연"];
+const PAID_STAGES = ["결제 완료", "결제 지연", "자금집행 완료"];
 function computeCustomerTypeData(allDeals, periodType, periodValue) {
   // 결제 완료 / 결제 지연 단계 딜만 추출 — 거래일 기준
   const wonDeals = allDeals
