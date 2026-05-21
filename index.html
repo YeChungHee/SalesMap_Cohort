@@ -2961,12 +2961,6 @@ function _showTrendInline(cat, month) {
   panel.style.display = "block";
 }
 
-// ── (구) 팝업 함수 — 레거시 참조 방지용 스텁 ──
-function _showTrendPopup(cat, month) {}
-  const row = (STATE.trendData || []).find(r => r.month === month);
-  if (!row || !row[cat]) return;
-
-
 // 딜 목록에서 대시보드 지표 계산
 function computeFromDeals(deals, leads = []) {
   const mapping = loadPipelineMapping();
