@@ -359,7 +359,7 @@ tbody tr:hover td{background:var(--primary-50)}
               <span id="velocity-status" style="font-size:11px;color:var(--muted)"></span>
             </div>
           </div>
-          <div class="card-body np tw"><table><thead><tr><th>파이프라인</th><th>단계</th><th>P50</th><th>P75</th><th>P90</th><th>정체</th><th>위험도</th></tr></thead><tbody id="velocity-rows"></tbody></table></div>
+          <div class="card-body np tw"><table><thead><tr><th>파이프라인</th><th>단계</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P50')" title="클릭하여 설명 보기">P50 ℹ</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P75')" title="클릭하여 설명 보기">P75 ℹ</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P90')" title="클릭하여 설명 보기">P90 ℹ</th><th>정체</th><th>위험도</th></tr></thead><tbody id="velocity-rows"></tbody></table></div>
         </div>
         <div class="card">
           <div class="card-header"><h3>단계 역행(Regression)</h3><span class="pill pill-orange">비즈니스 리스크</span></div>
@@ -663,6 +663,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.4.5",
+    date: "2026-05-21",
+    label: "파이프라인 단계 순서 변경 + P50/P75/P90 설명 팝업",
+    items: [
+      { type:"feat", text:"PIPELINE_STAGE_DEFAULTS에 '자금집행 완료' 단계 추가 (완료 카테고리, 결제 완료 앞에 배치)" },
+      { type:"feat", text:"CAT_OPTIONS·CAT_COLOR에 '완료(purple)' 카테고리 추가" },
+      { type:"feat", text:"단계 체류 시간 표 P50/P75/P90 헤더 클릭 시 설명 팝업 표시" }
+    ]
+  },
   {
     version: "2.4.3",
     date: "2026-05-21",
@@ -1694,6 +1704,32 @@ function fmtDwell(h) {
   if (days === 0) return `${hrs}시간`;
   if (hrs  === 0) return `${days}일`;
   return `${days}일 ${hrs}시간`;
+}
+
+// P50/P75/P90 설명 팝업
+const PCTILE_HELP = {
+  P50: { title:"P50 — 중앙값", body:"전체 딜의 절반(50%)이 해당 단계에서 이 시간 이내에 다음 단계로 이동합니다.\n가장 일반적인 처리 속도를 나타냅니다." },
+  P75: { title:"P75 — 상위 25% 기준선", body:"전체 딜의 75%가 이 시간 이내에 해당 단계를 통과합니다.\n느린 편 딜의 기준선으로, P50보다 오래 걸리는 딜을 파악하는 데 유용합니다." },
+  P90: { title:"P90 — 상위 10% 기준선", body:"전체 딜의 90%가 이 시간 이내에 해당 단계를 통과합니다.\n상위 10%의 느린 딜만 이 시간을 초과하며, 병목이나 리스크 딜을 식별하는 지표입니다." }
+};
+function showPctileHelp(metric) {
+  const info = PCTILE_HELP[metric];
+  if (!info) return;
+  // 기존 팝업 제거
+  const prev = document.getElementById("pctile-popup");
+  if (prev) prev.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "pctile-popup";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9000;display:flex;align-items:center;justify-content:center";
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);padding:28px 32px;max-width:420px;width:90%;position:relative">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--text)">${info.title}</div>
+      <div style="font-size:13px;line-height:1.7;color:var(--fg-3);white-space:pre-line">${info.body}</div>
+      <button onclick="document.getElementById('pctile-popup').remove()"
+        style="margin-top:20px;padding:7px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">닫기</button>
+    </div>`;
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 // 스테이지 체류
@@ -3224,6 +3260,8 @@ const PIPELINE_STAGE_DEFAULTS = [
   { pipe:"세일즈", stage:"심사 중",        label:"심사 중",        cat:"진행", threshH:240, include:true  },
   { pipe:"세일즈", stage:"자료 보완 중",   label:"자료 보완 중",   cat:"진행", threshH:72,  include:true  },
   { pipe:"세일즈", stage:"실사/협의 중",   label:"실사/협의 중",   cat:"진행", threshH:72,  include:true  },
+  // ── 완료: 자금집행 완료 ──
+  { pipe:"세일즈", stage:"자금집행 완료",  label:"자금집행 완료",  cat:"완료", threshH:0,   include:true  },
   // ── 1차 종료: 성사 ──
   { pipe:"세일즈", stage:"결제 완료",      label:"결제 완료",      cat:"성사", threshH:0,   include:true  },
   // ── 채권추심: 결제 완료로 전환 가능 (비터미널) ──
@@ -3244,8 +3282,8 @@ const PIPELINE_STAGE_DEFAULTS = [
   { pipe:"리드", stage:"영업 대상 확정", label:"영업 대상 확정", cat:"종료", threshH:0,   include:true  },
   { pipe:"리드", stage:"영업 대상 보류", label:"영업 대상 보류", cat:"종료", threshH:0,   include:false }
 ];
-const CAT_OPTIONS = ["진행","성사","채권","실패","종료"];
-const CAT_COLOR   = { 진행:"blue", 성사:"green", 채권:"orange", 실패:"red", 종료:"gray" };
+const CAT_OPTIONS = ["진행","완료","성사","채권","실패","종료"];
+const CAT_COLOR   = { 진행:"blue", 완료:"purple", 성사:"green", 채권:"orange", 실패:"red", 종료:"gray" };
 
 function loadPipelineMapping() {
   try {
