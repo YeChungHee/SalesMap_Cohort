@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.1</title>
+<title>플로우페이 코호트 대시보드 v2.5.2</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -280,7 +280,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="g g-auto">
         <div class="card">
           <div class="card-header"><h3>코호트 전환 현황</h3><span class="pill pill-gray" id="cohort-period-label">2026년 5월</span></div>
-          <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>결제 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
+          <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>자금집행 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
         </div>
         <div class="card">
           <div class="card-header">
@@ -662,7 +662,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>업데이트 내역</h3>
-          <span class="pill pill-blue" id="latest-version-badge">v2.5.1</span>
+          <span class="pill pill-blue" id="latest-version-badge">v2.5.2</span>
         </div>
         <div class="card-body" id="updates-log" style="padding:0"></div>
       </div>
@@ -678,6 +678,18 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.2",
+    date: "2026-05-21",
+    label: "코호트 전환 현황 컬럼 재정의 — 유입·리드전환·딜전환·자금집행완료 기준 변경",
+    items: [
+      { type:"feat", text:"유입 = 세일즈맵 등록 업체 수 (orgChannelCount) — 기존 파이프라인 딜 수에서 변경" },
+      { type:"feat", text:"리드 전환 = 리드 파이프라인 진입 수 (leadsSourceMap) — 기존 유입과 동일(100%) 하드코딩에서 변경" },
+      { type:"feat", text:"딜 전환 = 파이프라인 진입 딜 전체 수 (sourceMap.input) — 기존 성사 딜 수에서 변경" },
+      { type:"feat", text:"결제 완료 컬럼 → 자금집행 완료 (cur === '자금집행 완료' 조건으로 교체)" },
+      { type:"fix",  text:"딜 전환율 분모 = 등록 업체 수(org 수)로 변경 — 공식 유지, 분모만 교체" }
+    ]
+  },
   {
     version: "2.5.1",
     date: "2026-05-21",
@@ -1525,7 +1537,7 @@ function _showCohortDetailPopup(group) {
       <th style="text-align:left;padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600">채널</th>
       <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">유입</th>
       <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">딜 전환</th>
-      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">결제</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">자금집행</th>
       <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">딜 전환율</th>
     </tr></thead><tbody>`;
   group.items.sort((a, b) => b.input - a.input).forEach((c, i) => {
@@ -3398,11 +3410,11 @@ function computeFromDeals(deals, leads = []) {
     const purchaseType = parseDealPurchaseType(deal); // null | "New" | "Repeat"
     if (src) {
       if (!sourceMap[src]) sourceMap[src] = { input:0, deals:0, paid:0, new_:0, repeat:0, leads:0 };
-      sourceMap[src].input++;
+      sourceMap[src].input++;                                        // 파이프라인 진입 딜 전체 (→ 딜 전환)
       if (purchaseType === "Repeat") sourceMap[src].repeat++;
       else sourceMap[src].new_++; // null(넘버링 없음) → 신규로 처리
-      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;
-      if (cur && cur === "결제 완료")      sourceMap[src].paid++;
+      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;  // 성사 딜 (내부용)
+      if (cur && cur === "자금집행 완료")  sourceMap[src].paid++;   // 자금집행 완료
     }
 
     // 월별 집계 — 거래 준비 진입 날짜 기준 (없으면 createdAt 폴백)
@@ -3476,25 +3488,39 @@ function computeFromDeals(deals, leads = []) {
     .map(([month, v]) => ({ month, ...v }));
 
   // 소스별 코호트
+  // 컬럼 재정의:
+  //   input  = 세일즈맵 등록 업체 수 (orgChannelCount, 대분류 기준)
+  //   leads  = 리드 파이프라인 진입 수 (leadsSourceMap)
+  //   deals  = 파이프라인 진입 딜 전체 수 (sourceMap.input → "딜 전환")
+  //   paid   = 자금집행 완료 수 (sourceMap.paid)
   if (Object.keys(sourceMap).length) {
-    STATE.cohortsBySource = Object.entries(sourceMap).map(([source, v]) => ({
-      source, label: source,
-      input: v.input,
-      leads: leadsSourceMap[source] || 0,  // 실제 리드 수 (없으면 0)
-      deals: v.deals,
-      paid:  v.paid,
-      new_: v.new_,
-      retention: v.repeat,
-      reactivated: 0
-    }));
+    const seenTops = new Set(); // 대분류 첫 행에만 org 수 부여 (중복 합산 방지)
+    STATE.cohortsBySource = Object.entries(sourceMap).map(([source, v]) => {
+      const top = (source || "").split(" · ")[0].trim();
+      const orgInput = !seenTops.has(top) ? (STATE.orgChannelCount[top] || 0) : 0;
+      if (!seenTops.has(top)) seenTops.add(top);
+      return {
+        source, label: source,
+        input: orgInput,                          // 유입 = 등록 업체 수
+        leads: leadsSourceMap[source] || 0,       // 리드 전환 = 리드 파이프라인 진입 수
+        deals: v.input,                           // 딜 전환 = 파이프라인 진입 딜 전체
+        paid:  v.paid,                            // 자금집행 완료
+        new_: v.new_,
+        retention: v.repeat,
+        reactivated: 0
+      };
+    });
   } else {
     // 소스 필드 없을 때 — "전체" 단일 행으로 집계 표시
     const totalNew    = deals.filter(d => parseDealPurchaseType(d) !== "Repeat").length;
     const totalRepeat = deals.filter(d => parseDealPurchaseType(d) === "Repeat").length;
+    const totalOrgInput = Object.values(STATE.orgChannelCount || {}).reduce((a, b) => a + b, 0) || totalDeals;
     STATE.cohortsBySource = [{
       source: "전체", label: "전체 (소스 미분류)",
-      input: totalDeals, leads: totalLeads,
-      deals: wonDeals, paid: deals.filter(d => detectCurrentStage(d, "세일즈 파이프라인") === "결제 완료").length,
+      input: totalOrgInput,
+      leads: totalLeads,
+      deals: totalDeals,
+      paid: deals.filter(d => detectCurrentStage(d, "세일즈 파이프라인") === "자금집행 완료").length,
       new_: totalNew, retention: totalRepeat, reactivated: 0
     }];
   }
