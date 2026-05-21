@@ -606,6 +606,21 @@ tbody tr:hover td{background:var(--primary-50)}
         </div>
       </div>
 
+      <!-- 유입경로 진단 -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">
+          <h3>유입경로 진단</h3>
+          <span class="pill pill-gray">등록 업체 수 vs 파이프라인 딜 수</span>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+            등록된 업체(조직)의 유입경로 vs 실제 세일즈 파이프라인에 진입한 딜 수를 비교합니다.
+            <strong>유입 수치가 낮으면</strong> 해당 채널 업체들이 아직 딜을 생성하지 않은 것입니다.
+          </div>
+          <div id="channel-diag-table" style="font-size:13px">데이터 로딩 후 표시됩니다.</div>
+        </div>
+      </div>
+
       <!-- 파이프라인 매핑 설정 -->
       <div class="card" style="margin-top:16px">
         <div class="card-header">
@@ -1269,6 +1284,7 @@ const STATE = {
   pipelineMetrics:   null,      // null = 미로드
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
   orgMap:            {},         // organizationId → { channel, detail, name } (유입경로 + 업체명 조인)
+  orgChannelCount:   {},         // 진단: 채널별 등록 업체 수
   trendData:         [],         // 월별 구매 유형 추이 (computeMonthlyPurchaseTypeTrend 결과)
   funnelPeriodType:  'monthly',
   funnelPeriodValue: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })(),
@@ -1724,6 +1740,41 @@ function renderCycles() {
       <td>${c.outlier > 2 ? `<span style="color:var(--red);font-weight:700">${c.outlier}</span>` : c.outlier}</td>
     </tr>`;
   }).join("");
+}
+
+// 유입경로 진단 (설정 탭)
+function renderChannelDiag() {
+  const el = $("channel-diag-table");
+  if (!el) return;
+  const orgCC = STATE.orgChannelCount;
+  const dealCC = {};
+  STATE.cohortsBySource.forEach(c => {
+    const top = (c.source || "").split(" · ")[0].trim() || "(미분류)";
+    dealCC[top] = (dealCC[top] || 0) + c.input;
+  });
+  const allKeys = Array.from(new Set([...Object.keys(orgCC), ...Object.keys(dealCC)])).sort();
+  if (!allKeys.length) { el.textContent = "데이터 로딩 후 표시됩니다."; return; }
+  el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px">
+    <thead><tr style="border-bottom:1px solid var(--line)">
+      <th style="text-align:left;padding:6px 8px;color:var(--muted);font-weight:500">유입 경로</th>
+      <th style="text-align:right;padding:6px 8px;color:var(--muted);font-weight:500">등록 업체 수</th>
+      <th style="text-align:right;padding:6px 8px;color:var(--muted);font-weight:500">파이프라인 딜 수</th>
+      <th style="text-align:right;padding:6px 8px;color:var(--muted);font-weight:500">전환율</th>
+    </tr></thead>
+    <tbody>${allKeys.map(k => {
+      const org = orgCC[k] || 0;
+      const deal = dealCC[k] || 0;
+      const rate = org ? (deal / org * 100).toFixed(0) : "–";
+      const warn = org > 5 && deal <= 1;
+      return `<tr style="border-bottom:1px solid var(--line-light,#f1f5f9)${warn ? ";background:rgba(239,68,68,.04)" : ""}">
+        <td style="padding:7px 8px;font-weight:${warn ? 600 : 400}">${k}${warn ? ' <span style="color:var(--red);font-size:11px">⚠ 딜 미생성</span>' : ""}</td>
+        <td style="text-align:right;padding:7px 8px">${org}</td>
+        <td style="text-align:right;padding:7px 8px;color:${deal === 0 ? "var(--red)" : "inherit"}">${deal}</td>
+        <td style="text-align:right;padding:7px 8px;color:var(--muted)">${rate}${rate !== "–" ? "%" : ""}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table>
+  <div style="margin-top:10px;font-size:11px;color:var(--muted)">⚠ 표시 = 등록 업체는 많지만 파이프라인에 딜이 없거나 1건 이하인 채널</div>`;
 }
 
 // 리텐션 차트
@@ -2424,6 +2475,7 @@ function renderAll() {
   renderLedger();
   renderSettingsView();
   renderPipelineMapping();
+  renderChannelDiag();
   renderUpdates();
   $("topbar-asof").textContent = "기준: " + now();
   $("sb-slack-user").textContent = STATE.settings.slackUser || "@예충희";
@@ -3498,15 +3550,21 @@ async function loadRealData() {
     // 조직 유입경로 맵 빌드: organizationId → { channel, detail }
     if (orgs.length) {
       STATE.orgMap = {};
+      const orgChannelCount = {}; // 진단용: 채널별 org 수
       for (const org of orgs) {
         const id = org.id || org.organizationId || org["id"];
         if (!id) continue;
+        const ch = org["유입경로"] || org["유입 경로"] || "";
+        const chTop = ch.split(" · ")[0].trim();
+        if (chTop) orgChannelCount[chTop] = (orgChannelCount[chTop] || 0) + 1;
+        else        orgChannelCount["(미분류)"] = (orgChannelCount["(미분류)"] || 0) + 1;
         STATE.orgMap[String(id)] = {
-          channel: org["유입경로"]   || org["유입 경로"]   || "",
+          channel: ch,
           detail:  org["유입경로_상세"] || org["유입 경로 상세"] || "",
           name:    org.name || org["이름"] || org["회사명"] || ""
         };
       }
+      STATE.orgChannelCount = orgChannelCount; // 진단 데이터 저장
     }
     if (deals.length) {
       computeFromDeals(deals, leads);
