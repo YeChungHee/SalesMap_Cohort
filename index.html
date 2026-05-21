@@ -2897,7 +2897,7 @@ function renderPurchaseTypeTrend() {
     const lbl = document.createElement("div");
     lbl.style.cssText = "font-size:10px;color:var(--fg-4);text-align:center;white-space:nowrap";
     const [yy, mm] = row.month.split("-");
-    lbl.textContent = mm === "01" ? `1월('${yy.slice(2)})` : `${parseInt(mm)}월`;
+    lbl.textContent = `${yy.slice(2)}년 ${parseInt(mm)}월`;
 
     col.appendChild(barBox);
     col.appendChild(lbl);
