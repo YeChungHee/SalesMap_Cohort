@@ -2762,25 +2762,25 @@ function parseDealPurchaseType(deal) {
 }
 
 // ── 구매 유형 분포 계산 (신규/리텐션/재활성화) ──
-// 기준: 선택 기간 내 '자금집행 완료' 진입 딜
+// 기준: '결제 완료' 또는 '결제 지연' 단계 딜 + '거래일' 날짜 기준
 //  - 구매이력 = "New"   → 신규
-//  - 구매이력 = "Repeat" + 직전 자금집행 완료 ≤ 6개월 → 리텐션
-//  - 구매이력 = "Repeat" + 직전 자금집행 완료 > 6개월  → 재활성화
+//  - 구매이력 = "Repeat" + 직전 거래일 ≤ 6개월 → 리텐션
+//  - 구매이력 = "Repeat" + 직전 거래일 > 6개월  → 재활성화
+const PAID_STAGES = ["결제 완료", "결제 지연"];
 function computeCustomerTypeData(allDeals, periodType, periodValue) {
-  // 자금집행 완료 딜 추출 — 없으면 거래일 → 결제 완료 순 폴백
+  // 결제 완료 / 결제 지연 단계 딜만 추출 — 거래일 기준
   const wonDeals = allDeals
     .map(d => {
-      const dwells = parseStageDwells(d, "세일즈 파이프라인");
-      // 거래일 = 자금수요예측일(추측 데이터) — 집계 제외
-      // 자금집행 완료 단계 진입 OR 결제 완료 단계 진입 건만 반영
-      const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
-      const fb2       = dwells["결제 완료"]?.enteredTs || null;
-      const enteredTs = primaryTs || fb2 || null;
-      const purchaseType = d["구매이력"] || parseDealPurchaseType(d) || null; // "New" | "Repeat" | null
+      const cur = detectCurrentStage(d, "세일즈 파이프라인");
+      if (!PAID_STAGES.includes(cur)) return null;
+      const dateRaw  = d["거래일"];
+      const enteredTs = dateRaw ? new Date(dateRaw).getTime() : null;
+      if (!enteredTs || isNaN(enteredTs)) return null;
+      const purchaseType = d["구매이력"] || parseDealPurchaseType(d) || null;
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       return { orgId, enteredTs, purchaseType };
     })
-    .filter(d => d.enteredTs)
+    .filter(Boolean)
     .sort((a, b) => a.enteredTs - b.enteredTs);
 
   // 기간 필터 범위 계산
@@ -2827,33 +2827,36 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
 
 // ── 월별 구매 유형 추이 계산 ──
 // 반환: [{ month:"2026-04", new_:{count,orgs:[]}, retention:{count,orgs:[]}, reactivated:{count,orgs:[]} }]
+// 기준: '결제 완료' 또는 '결제 지연' 단계 딜 + '거래일' 날짜 기준 (전체 기간)
 function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
-  // [개선 C] 전체 기간 이력 — Repeat 이전 거래 조회 시 12개월 제한 없이 전체 사용
+  // 전체 기간 거래일 이력 — Repeat 이전 거래 조회용 (12개월 제한 없음)
   const orgHistory = allDeals
     .map(d => {
-      const dwells = parseStageDwells(d, "세일즈 파이프라인");
-      const ts = dwells["자금집행 완료"]?.enteredTs || dwells["결제 완료"]?.enteredTs || null;
+      const cur = detectCurrentStage(d, "세일즈 파이프라인");
+      if (!PAID_STAGES.includes(cur)) return null;
+      const dateRaw = d["거래일"];
+      const ts = dateRaw ? new Date(dateRaw).getTime() : null;
+      if (!ts || isNaN(ts)) return null;
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       return { orgId, ts };
     })
-    .filter(d => d.ts)
+    .filter(Boolean)
     .sort((a, b) => a.ts - b.ts);
 
-  // 최근 N개월 집계 대상 딜
+  // 최근 N개월 집계 대상 딜 — 결제 완료/결제 지연 + 거래일 기준
   const wonDeals = allDeals
     .map(d => {
-      const dwells    = parseStageDwells(d, "세일즈 파이프라인");
-      // 거래일 = 자금수요예측일(추측 데이터) — 집계 제외
-      // 자금집행 완료 단계 진입 OR 결제 완료 단계 진입 건만 반영
-      const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
-      const fb2       = dwells["결제 완료"]?.enteredTs || null;
-      const enteredTs = primaryTs || fb2 || null;
+      const cur = detectCurrentStage(d, "세일즈 파이프라인");
+      if (!PAID_STAGES.includes(cur)) return null;
+      const dateRaw   = d["거래일"];
+      const enteredTs = dateRaw ? new Date(dateRaw).getTime() : null;
+      if (!enteredTs || isNaN(enteredTs)) return null;
       const purchaseType = d["구매이력"] || parseDealPurchaseType(d) || null;
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       const orgName = STATE.orgMap[orgId]?.name || d["회사"] || d["organizationName"] || d["이름"] || orgId;
       return { orgId, orgName, enteredTs, purchaseType };
     })
-    .filter(d => d.enteredTs)
+    .filter(Boolean)
     .sort((a, b) => a.enteredTs - b.enteredTs);
 
   // 최근 N개월 목록 생성 (오래된 순 → 최신 순)
