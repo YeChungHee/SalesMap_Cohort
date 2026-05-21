@@ -2718,6 +2718,16 @@ function populateCustPeriodOptions() {
   }
 }
 
+// ── 딜 제목 넘버링 파싱 → 구매이력 폴백 ──
+// 딜 제목 형식: "(04)업체명_건명-MMDD"
+// (1) → New, (2 이상) → Repeat
+function parseDealPurchaseType(deal) {
+  const title = deal.name || deal["이름"] || deal["딜명"] || deal["제목"] || "";
+  const m = String(title).match(/^\((\d+)\)/);
+  if (!m) return null;
+  return parseInt(m[1], 10) > 1 ? "Repeat" : "New";
+}
+
 // ── 구매 유형 분포 계산 (신규/리텐션/재활성화) ──
 // 기준: 선택 기간 내 '자금집행 완료' 진입 딜
 //  - 구매이력 = "New"   → 신규
@@ -2733,7 +2743,7 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
       const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
       const fb2       = dwells["결제 완료"]?.enteredTs || null;
       const enteredTs = primaryTs || fb2 || null;
-      const purchaseType = d["구매이력"] || null; // "New" | "Repeat" | null
+      const purchaseType = d["구매이력"] || parseDealPurchaseType(d) || null; // "New" | "Repeat" | null
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       return { orgId, enteredTs, purchaseType };
     })
@@ -2793,7 +2803,7 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
       const primaryTs = dwells["자금집행 완료"]?.enteredTs || null;
       const fb2       = dwells["결제 완료"]?.enteredTs || null;
       const enteredTs = primaryTs || fb2 || null;
-      const purchaseType = d["구매이력"] || null;
+      const purchaseType = d["구매이력"] || parseDealPurchaseType(d) || null;
       const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
       const orgName = STATE.orgMap[orgId]?.name || d["회사"] || d["organizationName"] || d["이름"] || orgId;
       return { orgId, orgName, enteredTs, purchaseType };
