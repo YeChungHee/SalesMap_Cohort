@@ -2795,6 +2795,18 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
 // ── 월별 구매 유형 추이 계산 ──
 // 반환: [{ month:"2026-04", new_:{count,orgs:[]}, retention:{count,orgs:[]}, reactivated:{count,orgs:[]} }]
 function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
+  // [개선 C] 전체 기간 이력 — Repeat 이전 거래 조회 시 12개월 제한 없이 전체 사용
+  const orgHistory = allDeals
+    .map(d => {
+      const dwells = parseStageDwells(d, "세일즈 파이프라인");
+      const ts = dwells["자금집행 완료"]?.enteredTs || dwells["결제 완료"]?.enteredTs || null;
+      const orgId = String(d.organizationId || d["회사 ID"] || d["회사id"] || "unknown");
+      return { orgId, ts };
+    })
+    .filter(d => d.ts)
+    .sort((a, b) => a.ts - b.ts);
+
+  // 최근 N개월 집계 대상 딜
   const wonDeals = allDeals
     .map(d => {
       const dwells    = parseStageDwells(d, "세일즈 파이프라인");
@@ -2819,7 +2831,8 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
     let yy = now.getFullYear();
     while (mm <= 0) { mm += 12; yy--; }
     const monthStr = `${yy}-${String(mm).padStart(2,'0')}`;
-    result.push({ month: monthStr, new_: { count:0, orgs:[] }, retention: { count:0, orgs:[] }, reactivated: { count:0, orgs:[] } });
+    // [개선 B] unclassified 항목 추가 — 구매이력 미입력 + 제목 파싱 불가 딜
+    result.push({ month: monthStr, new_: { count:0, orgs:[] }, retention: { count:0, orgs:[] }, reactivated: { count:0, orgs:[] }, unclassified: { count:0, orgs:[] } });
   }
 
   for (const row of result) {
@@ -2837,15 +2850,17 @@ function computeMonthlyPurchaseTypeTrend(allDeals, months = 12) {
       if (d.purchaseType === "New") {
         cat = "new_";
       } else if (d.purchaseType === "Repeat") {
-        const prevDeals = wonDeals.filter(x => x.orgId === d.orgId && x.enteredTs < d.enteredTs);
+        // [개선 C] orgHistory(전체 기간)에서 이전 거래 검색
+        const prevDeals = orgHistory.filter(x => x.orgId === d.orgId && x.ts < d.enteredTs);
         if (!prevDeals.length) {
           cat = "new_";
         } else {
-          const gap = (d.enteredTs - prevDeals[prevDeals.length - 1].enteredTs) / (1000 * 60 * 60 * 24 * 30);
+          const gap = (d.enteredTs - prevDeals[prevDeals.length - 1].ts) / (1000 * 60 * 60 * 24 * 30);
           cat = gap <= 6 ? "retention" : "reactivated";
         }
       } else {
-        cat = "new_";
+        // [개선 B] 구매이력 미입력 & 제목 파싱 불가 → 미분류
+        cat = "unclassified";
       }
       row[cat].count++;
       row[cat].orgs.push(d.orgName);
@@ -2863,12 +2878,14 @@ function renderPurchaseTypeTrend() {
     return;
   }
   STATE.trendData = computeMonthlyPurchaseTypeTrend(STATE.rawDeals);
-  const maxTotal = Math.max(...STATE.trendData.map(r => r.new_.count + r.retention.count + r.reactivated.count), 1);
+  const totalUnclassified = STATE.trendData.reduce((s, r) => s + (r.unclassified?.count || 0), 0);
+  const maxTotal = Math.max(...STATE.trendData.map(r => r.new_.count + r.retention.count + r.reactivated.count + (r.unclassified?.count||0)), 1);
   const BAR_MAX_H = 120;
   const CATS = [
-    { key:"new_",        label:"신규",    color:"#2563eb" },
-    { key:"retention",   label:"리텐션",  color:"#16a34a" },
-    { key:"reactivated", label:"재활성화", color:"#d97706" }
+    { key:"new_",          label:"신규",    color:"#2563eb" },
+    { key:"retention",     label:"리텐션",  color:"#16a34a" },
+    { key:"reactivated",   label:"재활성화", color:"#d97706" },
+    { key:"unclassified",  label:"미분류",  color:"#9ca3af" }
   ];
 
   const sqrtMax = Math.sqrt(maxTotal);
@@ -2879,8 +2896,16 @@ function renderPurchaseTypeTrend() {
   const barsWrap = document.createElement("div");
   barsWrap.style.cssText = "display:flex;align-items:flex-end;gap:4px;padding:8px 0 0";
 
+  // [개선 B] 미분류 건수 경고 배지
+  if (totalUnclassified > 0) {
+    const warn = document.createElement("div");
+    warn.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;border-radius:6px;background:#fef3c7;border:1px solid #f59e0b;font-size:12px;color:#92400e";
+    warn.innerHTML = `⚠️ 구매이력 미입력 딜 <strong>${totalUnclassified}건</strong> — 세일즈맵에서 구매이력(New/Repeat) 입력 필요`;
+    el.appendChild(warn);
+  }
+
   STATE.trendData.forEach(row => {
-    const total = row.new_.count + row.retention.count + row.reactivated.count;
+    const total = row.new_.count + row.retention.count + row.reactivated.count + (row.unclassified?.count||0);
     const col = document.createElement("div");
     col.style.cssText = "display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;gap:2px";
 
@@ -2950,8 +2975,8 @@ function _showTrendInline(cat, month) {
   const panel = document.getElementById("_trend-inline-panel");
   if (!panel) return;
 
-  const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화" };
-  const COLOR  = { new_:"#2563eb", retention:"#16a34a", reactivated:"#d97706" };
+  const LABEL = { new_:"신규", retention:"리텐션", reactivated:"재활성화", unclassified:"미분류" };
+  const COLOR  = { new_:"#2563eb", retention:"#16a34a", reactivated:"#d97706", unclassified:"#9ca3af" };
   const [yy, mm] = month.split("-");
   const monthStr = `${yy}년 ${parseInt(mm)}월`;
   const orgs = row[cat].orgs || [];
