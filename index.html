@@ -664,6 +664,15 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.4.8",
+    date: "2026-05-21",
+    label: "재활성화/리텐션 추이 — 월별 구매 유형 추이 소스 통일",
+    items: [
+      { type:"fix", text:"renderRetention() 데이터 소스를 STATE.monthlyCohort → STATE.trendData(computeMonthlyPurchaseTypeTrend)로 변경" },
+      { type:"fix", text:"renderAll() 실행 순서 조정 — renderPurchaseTypeTrend 먼저 실행 후 renderRetention" }
+    ]
+  },
+  {
     version: "2.4.7",
     date: "2026-05-21",
     label: "자금집행 완료 중복 표시 수정 + 결제 완료 → 딜 완료 표시명 변경",
@@ -1666,13 +1675,17 @@ function renderRetention() {
     el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
     return;
   }
-  const monthly = STATE.monthlyCohort;
+  // 월별 구매 유형 추이와 동일 소스 사용
+  if (!STATE.trendData?.length) {
+    STATE.trendData = computeMonthlyPurchaseTypeTrend(STATE.rawDeals);
+  }
+  const monthly = STATE.trendData;
   if (!monthly.length) {
     el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">데이터 없음</div>`;
     return;
   }
   const data = monthly.map(row => {
-    const total = (row.retention ?? 0) + (row.reactivated ?? 0);
+    const total = (row.retention?.count ?? 0) + (row.reactivated?.count ?? 0);
     return { l: (row.month || "").slice(5), v: total };
   });
   el.innerHTML = `
@@ -2303,8 +2316,8 @@ function renderAll() {
   renderCustomerType();
   renderHeatmap();
   renderCycles();
-  renderRetention();
   renderPurchaseTypeTrend();
+  renderRetention();
   renderPipelineCards();
   renderVelocity();
   renderDwellHeatmap();
