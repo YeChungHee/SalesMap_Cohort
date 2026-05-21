@@ -3466,8 +3466,12 @@ function renderDwellHeatmap(useMock = false) {
   months.forEach(m => { html += `<th style="font-size:11px;color:var(--muted);padding:3px 8px;white-space:nowrap">${m}</th>`; });
   html += `</tr></thead><tbody>`;
 
+  // 표시명 재정의 — Salesmap 내부 단계명 → 대시보드 표시명
+  const STAGE_LABEL = { "결제 완료": "자금집행 완료" };
+
   for (const stage of stageOrder) {
-    html += `<tr><td style="font-size:12px;color:var(--text);padding:3px 8px;white-space:nowrap">${stage}</td>`;
+    const displayStage = STAGE_LABEL[stage] || stage;
+    html += `<tr><td style="font-size:12px;color:var(--text);padding:3px 8px;white-space:nowrap">${displayStage}</td>`;
     const thresh = threshMap[stage] ?? MOCK_THRESH[stage] ?? 120;
     for (const month of months) {
       let p50h;
