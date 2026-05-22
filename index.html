@@ -3551,7 +3551,7 @@ async function salesmapGetAllDeals(maxPages = 10) {
   return deals;
 }
 
-async function salesmapGetAllOrgs(maxPages = 20) {
+async function salesmapGetAllOrgs(maxPages = 30) {
   const orgs = [];
   let cursor = null;
   for (let i = 0; i < maxPages; i++) {
@@ -3559,8 +3559,14 @@ async function salesmapGetAllOrgs(maxPages = 20) {
     const data = await salesmapGet(`/v2/organization${qs}`);
     const list = data?.data?.organizationList || data?.data?.list || data?.list || (Array.isArray(data) ? data : []);
     orgs.push(...list);
+    console.log(`[orgLoad] page ${i+1}: +${list.length} (total ${orgs.length})`);
     cursor = data?.data?.nextCursor || data?.data?.nextCurosr || data?.nextCursor || null;
-    if (!cursor || !list.length) break;
+    if (!cursor || !list.length) { console.log(`[orgLoad] done — cursor=${cursor}, list=${list.length}`); break; }
+  }
+  // 첫 번째 조직의 전체 키 로깅 — 필드명 확인용
+  if (orgs.length) {
+    console.log("[orgLoad] sample org keys:", Object.keys(orgs[0]));
+    console.log("[orgLoad] sample org:", JSON.stringify(orgs[0]).slice(0, 500));
   }
   return orgs;
 }
@@ -4506,19 +4512,36 @@ async function loadRealData() {
     if (orgs.length) {
       STATE.orgMap = {};
       const orgChannelCount = {}; // 진단용: 채널별 org 수
+
+      // 필드명 자동 감지: 첫 번째 org에서 유입경로/유입경로_상세 키 탐색
+      const sampleOrg = orgs[0] || {};
+      const allKeys = Object.keys(sampleOrg);
+      const CH_KEY   = allKeys.find(k => /^유입경로$|^유입 경로$|^inflow|^channel$/i.test(k))
+                    || allKeys.find(k => /유입경로/i.test(k) && !/상세|detail/i.test(k))
+                    || "유입경로";
+      const SUB_KEY  = allKeys.find(k => /유입경로_상세|유입 경로 상세|channelDetail|channel_detail|inflowDetail/i.test(k))
+                    || allKeys.find(k => /유입경로/i.test(k) && /상세|detail/i.test(k))
+                    || "유입경로_상세";
+      console.log(`[orgMap] 총 ${orgs.length}개 조직 로드. 채널 키="${CH_KEY}", 상세 키="${SUB_KEY}"`);
+
+      let detailHit = 0;
       for (const org of orgs) {
         const id = org.id || org.organizationId || org["id"];
         if (!id) continue;
-        const ch = org["유입경로"] || org["유입 경로"] || "";
+        const ch = org[CH_KEY] || org["유입경로"] || org["유입 경로"] || "";
+        const detail = org[SUB_KEY] || org["유입경로_상세"] || org["유입 경로 상세"] || "";
+        if (detail) detailHit++;
         const chTop = ch.split(" · ")[0].trim();
         if (chTop) orgChannelCount[chTop] = (orgChannelCount[chTop] || 0) + 1;
         else        orgChannelCount["(미분류)"] = (orgChannelCount["(미분류)"] || 0) + 1;
         STATE.orgMap[String(id)] = {
           channel: ch,
-          detail:  org["유입경로_상세"] || org["유입 경로 상세"] || "",
-          name:    org.name || org["이름"] || org["회사명"] || ""
+          detail,
+          name: org.name || org["이름"] || org["회사명"] || ""
         };
       }
+      console.log(`[orgMap] 유입경로_상세 값 있는 조직: ${detailHit}/${orgs.length}`);
+      console.log("[orgMap] 채널별 집계:", orgChannelCount);
       STATE.orgChannelCount = orgChannelCount; // 진단 데이터 저장
     }
     STATE.rawOrgs = orgs;
