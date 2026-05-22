@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.4</title>
+<title>플로우페이 코호트 대시보드 v2.6.5</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.5",
+    date: "2026-05-22",
+    label: "ReferenceError 긴급 수정 — getPipelineMapping → loadPipelineMapping",
+    items: [
+      { type:"fix", text:"_buildOrgSubRows 내 존재하지 않는 getPipelineMapping() 호출 → loadPipelineMapping()으로 수정" },
+      { type:"fix", text:"recomputeCohortForPeriod 내 동일 오류 수정 — 전체 대시보드 렌더링 불가 버그 해소" }
+    ]
+  },
   {
     version: "2.6.4",
     date: "2026-05-22",
@@ -1913,7 +1922,7 @@ function _buildOrgSubRows(channelLabel) {
   }
 
   // 5. 파이프라인 매핑
-  const mapping   = STATE.pipelineMapping || getPipelineMapping();
+  const mapping   = STATE.pipelineMapping || loadPipelineMapping();
   const wonStages = mapping.filter(m => m.cat === "성사").map(m => m.stage);
 
   // 6. sub-channel별 통계 계산
@@ -3938,7 +3947,7 @@ function recomputeCohortForPeriod() {
   }
 
   // 소스맵 재집계
-  const mapping  = STATE.pipelineMapping || getPipelineMapping();
+  const mapping  = STATE.pipelineMapping || loadPipelineMapping();
   const wonStages = mapping.filter(m => m.cat === "성사").map(m => m.stage);
   const sourceMap = {};
   const seenOrgIdsPerTop = {};
