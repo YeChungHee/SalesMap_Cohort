@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.3</title>
+<title>플로우페이 코호트 대시보드 v2.6.4</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.4",
+    date: "2026-05-22",
+    label: "오프/행사·재유입/기타 — 무조건 고정 표시 (데이터 없으면 0)",
+    items: [
+      { type:"fix", text:"로딩 중일 때만 early return — '데이터 없음' 조건으로 특수 채널이 사라지던 버그 완전 제거" },
+      { type:"fix", text:"오프/행사·재유입/기타는 어떤 기간을 선택해도 항상 행 유지, 수치 없으면 0 표시" }
+    ]
+  },
   {
     version: "2.6.3",
     date: "2026-05-22",
@@ -1714,11 +1723,14 @@ function renderKPI() {
 function renderCohortTable() {
   const cols = filteredCohorts();
   const tbody = $("cohort-rows");
-  // 특수 채널(오프/행사·재유입/기타)은 딜이 없어도 항상 표시하므로 early return 제거
-  if (!cols.length && !STATE.rawOrgs?.length) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
+
+  // 로딩 중일 때만 early return (특수 채널은 항상 표시해야 하므로 데이터 없음으로 return 금지)
+  if (STATE.dataLoading) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--fg-4)">로딩 중…</td></tr>`;
     return;
   }
+
+  const SPECIAL_CHANNELS = new Set(["오프/행사", "재유입/기타"]);
 
   // 대분류로 집계
   const groupMap = {};
@@ -1731,9 +1743,7 @@ function renderCohortTable() {
     g.new_ += (c.new_ || 0); g.retention += (c.retention || 0); g.reactivated += (c.reactivated || 0);
   });
 
-  const SPECIAL_CHANNELS = new Set(["오프/행사", "재유입/기타"]);
-
-  // 특수 채널은 해당 기간 딜이 없어도 orgMap 기반으로 항상 표시
+  // 특수 채널은 무조건 존재 — 기간 내 데이터 없으면 0으로 표시
   SPECIAL_CHANNELS.forEach(ch => {
     if (!groupMap[ch]) {
       groupMap[ch] = { label: ch, items: [], input:0, leads:0, deals:0, paid:0, new_:0, retention:0, reactivated:0 };
