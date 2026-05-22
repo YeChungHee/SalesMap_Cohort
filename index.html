@@ -3551,7 +3551,7 @@ async function salesmapGetAllDeals(maxPages = 10) {
   return deals;
 }
 
-async function salesmapGetAllOrgs(maxPages = 30) {
+async function salesmapGetAllOrgs(maxPages = 40) {
   const orgs = [];
   let cursor = null;
   for (let i = 0; i < maxPages; i++) {
@@ -4506,7 +4506,7 @@ async function loadRealData() {
     const [deals, leads, orgs] = await Promise.all([
       salesmapGetAllDeals(20),
       salesmapGetAllLeads(10),
-      salesmapGetAllOrgs(20).catch(() => [])
+      salesmapGetAllOrgs(40).catch(() => [])
     ]);
     // 조직 유입경로 맵 빌드: organizationId → { channel, detail }
     if (orgs.length) {
