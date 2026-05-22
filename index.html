@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.6</title>
+<title>플로우페이 코호트 대시보드 v2.6.7</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.7",
+    date: "2026-05-22",
+    label: "오프/행사 메인행 org 기반 수치 통일 + KinTex 정규화",
+    items: [
+      { type:"fix",  text:"오프/행사·재유입/기타 메인행 유입·리드전환·딜전환 — 딜 기반 → org 기반 집계로 통일 (팝업과 동일 소스)" },
+      { type:"feat", text:"KinTex KP_2026·킨텍스 KP-2026 변형을 '킨텍스 KP-2026'으로 정규화 합산" }
+    ]
+  },
   {
     version: "2.6.6",
     date: "2026-05-22",
@@ -1784,9 +1793,20 @@ function renderCohortTable() {
     }
 
     if (isSpecial) {
-      // 특수 채널: _buildOrgSubRows로 기간 연동 세부채널 계산 → +N개 배지 + 팝업
+      // 특수 채널: org 기반 집계로 메인행 수치도 통일
       const orgRows = _buildOrgSubRows(g.label);
       const subCount = orgRows.length;
+      // org 기반 합산 (팝업과 동일한 데이터 소스)
+      const oInput = orgRows.reduce((s,r) => s + r.inflow, 0);
+      const oLeads = orgRows.reduce((s,r) => s + r.leads,  0);
+      const oDeals = orgRows.reduce((s,r) => s + r.deals,  0);
+      const oPaid  = orgRows.reduce((s,r) => s + r.paid,   0);
+      const oNew   = orgRows.reduce((s,r) => s + r.new_,   0);
+      const oRet   = orgRows.reduce((s,r) => s + r.retention, 0);
+      const oDr    = oInput ? (oDeals / oInput * 100).toFixed(1) : 0;
+      const oBarW  = Math.min(Number(oDr), 100);
+      const oTypeTot = oNew + oRet;
+      const oCust  = oTypeTot ? `${Math.round(oNew/oTypeTot*100)}% 신규` : "–";
 
       if (subCount > 0) { tr.style.cssText = "cursor:pointer"; tr.title = "클릭해서 세부 내역 확인"; }
       tr.innerHTML = `
@@ -1794,12 +1814,12 @@ function renderCohortTable() {
           <div>${g.label}</div>
           ${subCount > 0 ? `<div style="font-size:10px;font-weight:500;color:var(--primary-500);margin-top:2px;cursor:pointer">+${subCount}개 세부채널</div>` : ""}
         </td>
-        <td>${fmt(g.input)}</td>
-        <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
-        <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
-        <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
-        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
-        <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
+        <td>${fmt(oInput)}</td>
+        <td>${fmt(oLeads)} <span style="color:var(--muted);font-size:11px">(${pct(oLeads,oInput)})</span></td>
+        <td>${fmt(oDeals)} <span style="color:var(--muted);font-size:11px">(${pct(oDeals,oInput)})</span></td>
+        <td>${isInvestor() ? fmt(oPaid) : maskIfInvestor(fmt(oPaid))}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${oBarW}%"></div></div><span style="font-size:12px">${oDr}%</span></div></td>
+        <td><span style="font-size:11px;color:var(--muted)">${oCust}</span></td>`;
       if (subCount > 0) tr.addEventListener("click", () => _showOrgSubPopup(g.label, orgRows));
       tbody.appendChild(tr);
     } else {
@@ -1889,7 +1909,11 @@ function _showCohortDetailPopup(group) {
 //  orgMap 기반 세부채널 데이터 빌드 (기간 연동)
 // ══════════════════════════════════════════════
 function _buildOrgSubRows(channelLabel) {
-  const _normSub = raw => /simtos/i.test(raw) ? "SIMTOS2026" : raw;
+  const _normSub = raw => {
+    if (/simtos/i.test(raw)) return "SIMTOS2026";
+    if (/kintex|킨텍스/i.test(raw)) return "킨텍스 KP-2026";
+    return raw;
+  };
 
   // 1. sub-channel별 org ID Set 구성
   const subOrgIds = {};
