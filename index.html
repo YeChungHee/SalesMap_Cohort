@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.5</title>
+<title>플로우페이 코호트 대시보드 v2.6.6</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.6",
+    date: "2026-05-22",
+    label: "세부채널 팝업 — 기타 임계값 개선 + 0 표시",
+    items: [
+      { type:"fix", text:"기간 필터 시 기타 묶음 임계값 20건 → 3건으로 완화 (월간 선택 시 세부채널 정상 표시)" },
+      { type:"fix", text:"리드 전환·딜 전환 0건일 때 '–' → '0'으로 통일 표시" }
+    ]
+  },
   {
     version: "2.6.5",
     date: "2026-05-22",
@@ -1958,11 +1967,12 @@ function _buildOrgSubRows(channelLabel) {
     rows.push({ name, inflow, leads: subLeads.length, deals: dealConv, paid, new_, retention });
   }
 
-  // 7. 20건 미만 → 기타 (유입 기준)
+  // 7. 기타 집계 — 전체 기간: 20건 미만, 기간 필터 시: 3건 미만
+  const etcThreshold = range ? 3 : 20;
   const mainRows = [];
   const etc = { name:"기타", inflow:0, leads:0, deals:0, paid:0, new_:0, retention:0 };
   rows.forEach(r => {
-    if (r.inflow < 20) {
+    if (r.inflow < etcThreshold) {
       etc.inflow += r.inflow; etc.leads += r.leads; etc.deals += r.deals;
       etc.paid += r.paid; etc.new_ += r.new_; etc.retention += r.retention;
     } else {
@@ -2026,8 +2036,8 @@ function _showOrgSubPopup(label, rows) {
     html += `<tr style="border-top:1px solid #f0f0f0;${i%2===0?"":"background:#fafafa"}">
       <td style="padding:9px 12px;font-size:13px;font-weight:500">${r.name}</td>
       ${td(fmt(r.inflow),";font-weight:600")}
-      ${td(r.leads ? `${fmt(r.leads)} <span style='color:#aaa;font-size:10px'>(${pct(r.leads,r.inflow)})</span>` : "–")}
-      ${td(r.deals ? `${fmt(r.deals)} <span style='color:#aaa;font-size:10px'>(${pct(r.deals,r.inflow)})</span>` : "–")}
+      ${td(r.leads ? `${fmt(r.leads)} <span style='color:#aaa;font-size:10px'>(${pct(r.leads,r.inflow)})</span>` : `<span style='color:#aaa'>0</span>`)}
+      ${td(r.deals ? `${fmt(r.deals)} <span style='color:#aaa;font-size:10px'>(${pct(r.deals,r.inflow)})</span>` : `<span style='color:#aaa'>0</span>`)}
       ${td(isInvestor() ? fmt(r.paid) : maskIfInvestor(fmt(r.paid)))}
       ${td(`<span style='color:${drColor};font-weight:600'>${drPct}%</span>`)}
       ${td(`<span style='color:#6b7684;font-size:11px'>${custBreak}</span>`)}
