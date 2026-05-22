@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.6</title>
+<title>플로우페이 코호트 대시보드 v2.5.7</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.7",
+    date: "2026-05-22",
+    label: "오프/행사 세부채널 정규화",
+    items: [
+      { type:"feat", text:"SIMTOS·SimTos 변형 전체를 'SIMTOS2026'으로 통합" },
+      { type:"feat", text:"20건 미만 세부채널은 '기타'로 자동 집계" }
+    ]
+  },
   {
     version: "2.5.6",
     date: "2026-05-22",
@@ -1691,39 +1700,39 @@ function renderCohortTable() {
         <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
       tbody.appendChild(tr);
 
-      // 서브행: input 내림차순 정렬
-      const sorted = g.items.slice().sort((a, b) => b.input - a.input);
-      const LIMIT = 10;
-      const shown = sorted.slice(0, LIMIT);
-      const rest  = sorted.slice(LIMIT);
+      // 서브행: SIMTOS 정규화 + 20건 미만 → 기타
+      const _normSub = raw => /simtos/i.test(raw) ? "SIMTOS2026" : raw;
+      const normMap = {};
+      g.items.forEach(c => {
+        const raw = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : c.source;
+        const key = _normSub(raw);
+        if (!normMap[key]) normMap[key] = { name: key, input:0, leads:0, deals:0, paid:0 };
+        const m = normMap[key];
+        m.input += c.input; m.leads += c.leads; m.deals += c.deals; m.paid += c.paid;
+      });
+      const mainRows = [], etcAgg = { name:"기타", input:0, leads:0, deals:0, paid:0 };
+      Object.values(normMap).forEach(m => {
+        if (m.input < 20) { etcAgg.input += m.input; etcAgg.leads += m.leads; etcAgg.deals += m.deals; etcAgg.paid += m.paid; }
+        else mainRows.push(m);
+      });
+      mainRows.sort((a,b) => b.input - a.input);
+      if (etcAgg.input > 0) mainRows.push(etcAgg);
 
-      shown.forEach(c => {
-        const sub = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : c.source;
+      mainRows.forEach(m => {
         const subTr = document.createElement("tr");
         subTr.style.cssText = "background:var(--bg-2)";
         subTr.innerHTML = `
           <td style="padding-left:28px;font-size:12px;color:var(--fg-3);font-weight:400">
-            <span style="color:var(--fg-4);margin-right:4px">└</span>${sub}
+            <span style="color:var(--fg-4);margin-right:4px">└</span>${m.name}
           </td>
-          <td>${fmt(c.input)}</td>
-          <td>${fmt(c.leads)} <span style="color:var(--muted);font-size:11px">(${pct(c.leads,c.input)})</span></td>
-          <td>${fmt(c.deals)} <span style="color:var(--muted);font-size:11px">(${pct(c.deals,c.input)})</span></td>
-          <td>${isInvestor() ? fmt(c.paid) : maskIfInvestor(fmt(c.paid))}</td>
+          <td>${fmt(m.input)}</td>
+          <td>${fmt(m.leads)} <span style="color:var(--muted);font-size:11px">(${pct(m.leads,m.input)})</span></td>
+          <td>${fmt(m.deals)} <span style="color:var(--muted);font-size:11px">(${pct(m.deals,m.input)})</span></td>
+          <td>${isInvestor() ? fmt(m.paid) : maskIfInvestor(fmt(m.paid))}</td>
           <td><span style="font-size:11px;color:var(--muted)">—</span></td>
           <td><span style="font-size:11px;color:var(--muted)">—</span></td>`;
         tbody.appendChild(subTr);
       });
-
-      if (rest.length > 0) {
-        const moreTr = document.createElement("tr");
-        moreTr.style.cssText = "background:var(--bg-2);cursor:pointer";
-        moreTr.innerHTML = `
-          <td colspan="7" style="padding:4px 28px;font-size:11px;color:var(--fg-4);font-style:italic">
-            외 ${rest.length}개 항목 (클릭하여 전체 보기)
-          </td>`;
-        moreTr.addEventListener("click", () => _showCohortDetailPopup(g));
-        tbody.appendChild(moreTr);
-      }
     } else {
       // 일반 채널
       tr.innerHTML = `
