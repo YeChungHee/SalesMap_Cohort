@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.5</title>
+<title>플로우페이 코호트 대시보드 v2.5.6</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.6",
+    date: "2026-05-22",
+    label: "코호트 테이블 세부채널 UX 개선",
+    items: [
+      { type:"feat", text:"코호트 테이블: 세부채널 배지를 채널명 아래 2행으로 표시" },
+      { type:"feat", text:"오프/행사·재유입/기타: 팝업 대신 인라인 서브행으로 세부채널 즉시 표시" }
+    ]
+  },
   {
     version: "2.5.5",
     date: "2026-05-22",
@@ -1653,6 +1662,8 @@ function renderCohortTable() {
     g.new_ += (c.new_ || 0); g.retention += (c.retention || 0); g.reactivated += (c.reactivated || 0);
   });
 
+  const SPECIAL_CHANNELS = new Set(["오프/행사", "재유입/기타"]);
+
   tbody.innerHTML = "";
   Object.values(groupMap).forEach(g => {
     const dr   = g.input ? (g.deals / g.input * 100).toFixed(1) : 0;
@@ -1660,25 +1671,76 @@ function renderCohortTable() {
     const dealTypeTot = (g.new_ + g.retention) || 0;
     const custBreak = dealTypeTot ? `${Math.round((g.new_ / dealTypeTot) * 100)}% 신규` : "–";
     const hasSub = g.items.length > 1;
+    const isSpecial = SPECIAL_CHANNELS.has(g.label);
 
     const tr = document.createElement("tr");
-    if (hasSub) tr.style.cssText = "cursor:pointer";
-    if (hasSub) tr.title = "클릭해서 세부 내역 확인";
-    tr.innerHTML = `
-      <td style="font-weight:${hasSub ? 600 : 400}">
-        ${g.label}
-        ${hasSub ? `<span style="font-size:10px;font-weight:500;color:var(--primary-500);margin-left:5px">▸ ${g.items.length}개 세부채널</span>` : ""}
-      </td>
-      <td>${fmt(g.input)}</td>
-      <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
-      <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
-      <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
-      <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
-      <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
-    if (hasSub) {
-      tr.addEventListener("click", () => _showCohortDetailPopup(g));
+    if (hasSub && !isSpecial) {
+      tr.style.cssText = "cursor:pointer";
+      tr.title = "클릭해서 세부 내역 확인";
     }
-    tbody.appendChild(tr);
+
+    if (isSpecial && hasSub) {
+      // 특수 채널: 배지 없음, 팝업 없음
+      tr.innerHTML = `
+        <td style="font-weight:600">${g.label}</td>
+        <td>${fmt(g.input)}</td>
+        <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
+        <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
+        <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
+        <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
+      tbody.appendChild(tr);
+
+      // 서브행: input 내림차순 정렬
+      const sorted = g.items.slice().sort((a, b) => b.input - a.input);
+      const LIMIT = 10;
+      const shown = sorted.slice(0, LIMIT);
+      const rest  = sorted.slice(LIMIT);
+
+      shown.forEach(c => {
+        const sub = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : c.source;
+        const subTr = document.createElement("tr");
+        subTr.style.cssText = "background:var(--bg-2)";
+        subTr.innerHTML = `
+          <td style="padding-left:28px;font-size:12px;color:var(--fg-3);font-weight:400">
+            <span style="color:var(--fg-4);margin-right:4px">└</span>${sub}
+          </td>
+          <td>${fmt(c.input)}</td>
+          <td>${fmt(c.leads)} <span style="color:var(--muted);font-size:11px">(${pct(c.leads,c.input)})</span></td>
+          <td>${fmt(c.deals)} <span style="color:var(--muted);font-size:11px">(${pct(c.deals,c.input)})</span></td>
+          <td>${isInvestor() ? fmt(c.paid) : maskIfInvestor(fmt(c.paid))}</td>
+          <td><span style="font-size:11px;color:var(--muted)">—</span></td>
+          <td><span style="font-size:11px;color:var(--muted)">—</span></td>`;
+        tbody.appendChild(subTr);
+      });
+
+      if (rest.length > 0) {
+        const moreTr = document.createElement("tr");
+        moreTr.style.cssText = "background:var(--bg-2);cursor:pointer";
+        moreTr.innerHTML = `
+          <td colspan="7" style="padding:4px 28px;font-size:11px;color:var(--fg-4);font-style:italic">
+            외 ${rest.length}개 항목 (클릭하여 전체 보기)
+          </td>`;
+        moreTr.addEventListener("click", () => _showCohortDetailPopup(g));
+        tbody.appendChild(moreTr);
+      }
+    } else {
+      // 일반 채널
+      tr.innerHTML = `
+        <td style="font-weight:${hasSub ? 600 : 400}">
+          ${hasSub ? `<div>${g.label}</div><div style="font-size:10px;font-weight:500;color:var(--primary-500);margin-top:2px;cursor:pointer">▸ ${g.items.length}개 세부채널</div>` : g.label}
+        </td>
+        <td>${fmt(g.input)}</td>
+        <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
+        <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
+        <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
+        <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
+      if (hasSub) {
+        tr.addEventListener("click", () => _showCohortDetailPopup(g));
+      }
+      tbody.appendChild(tr);
+    }
   });
   // cohort-period-label removed — period shown via selector
 }
