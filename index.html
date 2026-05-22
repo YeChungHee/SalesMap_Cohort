@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.8</title>
+<title>플로우페이 코호트 대시보드 v2.5.9</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.9",
+    date: "2026-05-22",
+    label: "전체 조직 로드 완성 + 세부채널 표시 정상화",
+    items: [
+      { type:"fix",  text:"org API 페이지당 50개 반환 확인 → maxPages 20→40으로 증가, 전체 1,444개 조직 로드 완성" },
+      { type:"fix",  text:"오프/행사 유입 566→998로 정상화 (전체 조직 반영)" },
+      { type:"feat", text:"SIMTOS2026 6개 변형 합산 469건 정상 표시" },
+      { type:"feat", text:"세부채널 배지 ▸ → + 기호 변경" }
+    ]
+  },
   {
     version: "2.5.8",
     date: "2026-05-22",
