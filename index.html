@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.7</title>
+<title>플로우페이 코호트 대시보드 v2.5.8</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.5.8",
+    date: "2026-05-22",
+    label: "오프/행사·재유입/기타 서브행 — 조직 데이터 기준으로 전환",
+    items: [
+      { type:"feat", text:"오프/행사·재유입/기타 세부채널: 딜 데이터 → STATE.orgMap(조직 유입경로_상세) 기준으로 변경" },
+      { type:"feat", text:"딜 수와 무관하게 항상 서브행 표시 — 유입 추적 목적" }
+    ]
+  },
   {
     version: "2.5.7",
     date: "2026-05-22",
@@ -1688,8 +1697,8 @@ function renderCohortTable() {
       tr.title = "클릭해서 세부 내역 확인";
     }
 
-    if (isSpecial && hasSub) {
-      // 특수 채널: 배지 없음, 팝업 없음
+    if (isSpecial) {
+      // 특수 채널: 딜 기반 요약행 + 조직(rawOrgs) 기반 서브행
       tr.innerHTML = `
         <td style="font-weight:600">${g.label}</td>
         <td>${fmt(g.input)}</td>
@@ -1700,39 +1709,48 @@ function renderCohortTable() {
         <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
       tbody.appendChild(tr);
 
-      // 서브행: SIMTOS 정규화 + 20건 미만 → 기타
+      // 서브행: STATE.orgMap 기반 (유입경로_상세) — 딜 수와 무관하게 항상 표시
       const _normSub = raw => /simtos/i.test(raw) ? "SIMTOS2026" : raw;
-      const normMap = {};
-      g.items.forEach(c => {
-        const raw = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : c.source;
+      const orgSubMap = {}; // name → org 수
+      for (const info of Object.values(STATE.orgMap)) {
+        const chTop = (info.channel || "").split(" · ")[0].trim();
+        if (chTop !== g.label) continue;
+        const raw = info.detail || "(없음)";
         const key = _normSub(raw);
-        if (!normMap[key]) normMap[key] = { name: key, input:0, leads:0, deals:0, paid:0 };
-        const m = normMap[key];
-        m.input += c.input; m.leads += c.leads; m.deals += c.deals; m.paid += c.paid;
-      });
-      const mainRows = [], etcAgg = { name:"기타", input:0, leads:0, deals:0, paid:0 };
-      Object.values(normMap).forEach(m => {
-        if (m.input < 20) { etcAgg.input += m.input; etcAgg.leads += m.leads; etcAgg.deals += m.deals; etcAgg.paid += m.paid; }
-        else mainRows.push(m);
-      });
-      mainRows.sort((a,b) => b.input - a.input);
-      if (etcAgg.input > 0) mainRows.push(etcAgg);
+        orgSubMap[key] = (orgSubMap[key] || 0) + 1;
+      }
 
-      mainRows.forEach(m => {
-        const subTr = document.createElement("tr");
-        subTr.style.cssText = "background:var(--bg-2)";
-        subTr.innerHTML = `
-          <td style="padding-left:28px;font-size:12px;color:var(--fg-3);font-weight:400">
-            <span style="color:var(--fg-4);margin-right:4px">└</span>${m.name}
-          </td>
-          <td>${fmt(m.input)}</td>
-          <td>${fmt(m.leads)} <span style="color:var(--muted);font-size:11px">(${pct(m.leads,m.input)})</span></td>
-          <td>${fmt(m.deals)} <span style="color:var(--muted);font-size:11px">(${pct(m.deals,m.input)})</span></td>
-          <td>${isInvestor() ? fmt(m.paid) : maskIfInvestor(fmt(m.paid))}</td>
-          <td><span style="font-size:11px;color:var(--muted)">—</span></td>
-          <td><span style="font-size:11px;color:var(--muted)">—</span></td>`;
-        tbody.appendChild(subTr);
+      const mainRows = []; let etcCount = 0;
+      Object.entries(orgSubMap).forEach(([name, cnt]) => {
+        if (cnt < 20) etcCount += cnt;
+        else mainRows.push({ name, count: cnt });
       });
+      mainRows.sort((a,b) => b.count - a.count);
+      if (etcCount > 0) mainRows.push({ name:"기타", count: etcCount });
+
+      if (mainRows.length === 0) {
+        // orgMap 미로드 시 안내
+        const emptyTr = document.createElement("tr");
+        emptyTr.style.cssText = "background:var(--bg-2)";
+        emptyTr.innerHTML = `<td colspan="7" style="padding:6px 28px;font-size:11px;color:var(--fg-4);font-style:italic">조직 데이터 로딩 후 표시됩니다</td>`;
+        tbody.appendChild(emptyTr);
+      } else {
+        mainRows.forEach(m => {
+          const subTr = document.createElement("tr");
+          subTr.style.cssText = "background:var(--bg-2)";
+          subTr.innerHTML = `
+            <td style="padding-left:28px;font-size:12px;color:var(--fg-3);font-weight:400">
+              <span style="color:var(--fg-4);margin-right:4px">└</span>${m.name}
+            </td>
+            <td style="font-size:12px">${fmt(m.count)}</td>
+            <td style="font-size:11px;color:var(--muted)">—</td>
+            <td style="font-size:11px;color:var(--muted)">—</td>
+            <td style="font-size:11px;color:var(--muted)">—</td>
+            <td style="font-size:11px;color:var(--muted)">—</td>
+            <td style="font-size:11px;color:var(--muted)">—</td>`;
+          tbody.appendChild(subTr);
+        });
+      }
     } else {
       // 일반 채널
       tr.innerHTML = `
