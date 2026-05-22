@@ -1755,7 +1755,7 @@ function renderCohortTable() {
       // 일반 채널
       tr.innerHTML = `
         <td style="font-weight:${hasSub ? 600 : 400}">
-          ${hasSub ? `<div>${g.label}</div><div style="font-size:10px;font-weight:500;color:var(--primary-500);margin-top:2px;cursor:pointer">▸ ${g.items.length}개 세부채널</div>` : g.label}
+          ${hasSub ? `<div>${g.label}</div><div style="font-size:10px;font-weight:500;color:var(--primary-500);margin-top:2px;cursor:pointer">+${g.items.length}개 세부채널</div>` : g.label}
         </td>
         <td>${fmt(g.input)}</td>
         <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
