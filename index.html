@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.1</title>
+<title>플로우페이 코호트 대시보드 v2.6.2</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.2",
+    date: "2026-05-22",
+    label: "일반 채널 세부 팝업 — 전체 컬럼 + 팝업 폭 확장",
+    items: [
+      { type:"fix",  text:"세부채널 팝업 누락 컬럼 추가: 리드 전환 · 고객 유형" },
+      { type:"fix",  text:"팝업 최소 폭 560 → 780px, 최대 폭 700 → 960px로 확장" },
+      { type:"feat", text:"7개 컬럼 통일: 채널·유입·리드전환·딜전환·자금집행완료·딜전환율·고객유형" }
+    ]
+  },
   {
     version: "2.6.1",
     date: "2026-05-22",
@@ -1777,7 +1787,7 @@ function _showCohortDetailPopup(group) {
     ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center";
     ov.addEventListener("click", e => { if (e.target === ov) ov.style.display = "none"; });
     const box = document.createElement("div");
-    box.style.cssText = "background:#fff;border-radius:12px;padding:0;min-width:560px;max-width:700px;max-height:80vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column";
+    box.style.cssText = "background:#fff;border-radius:12px;padding:0;min-width:780px;max-width:960px;max-height:80vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column";
     box.addEventListener("click", e => e.stopPropagation());
     const hdr = document.createElement("div");
     hdr.id = "_cdp-hdr";
@@ -1804,19 +1814,25 @@ function _showCohortDetailPopup(group) {
     <thead><tr style="background:#f8f9fa">
       <th style="text-align:left;padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600">채널</th>
       <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">유입</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">리드 전환</th>
       <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">딜 전환</th>
-      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">자금집행</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">자금집행완료</th>
       <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">딜 전환율</th>
+      <th style="padding:10px 12px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">고객 유형</th>
     </tr></thead><tbody>`;
   group.items.sort((a, b) => b.input - a.input).forEach((c, i) => {
     const sub = c.source.includes(" · ") ? c.source.split(" · ").slice(1).join(" · ") : c.source;
     const dr2 = c.input ? (c.deals / c.input * 100).toFixed(1) : "0.0";
+    const dealTypeTot = (c.new_ || 0) + (c.retention || 0);
+    const custBreak = dealTypeTot ? `${Math.round(((c.new_||0) / dealTypeTot) * 100)}% 신규` : "–";
     html += `<tr style="border-top:1px solid #f0f0f0;${i % 2 === 0 ? "" : "background:#fafafa"}">
       <td style="padding:10px 16px;font-size:13px">${sub}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.input)}</td>
+      <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.leads)}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.deals)}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.paid)}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px;color:${Number(dr2)>50?"#16a34a":Number(dr2)>20?"#d97706":"#6b7684"};font-weight:600">${dr2}%</td>
+      <td style="padding:10px 12px;text-align:right;font-size:12px;color:var(--muted)">${custBreak}</td>
     </tr>`;
   });
   html += `</tbody></table>`;
