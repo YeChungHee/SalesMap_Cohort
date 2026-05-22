@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.5.9</title>
+<title>플로우페이 코호트 대시보드 v2.6.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.0",
+    date: "2026-05-22",
+    label: "오프/행사·재유입/기타 — 인라인 서브행 → +N개 배지 + 팝업으로 통일",
+    items: [
+      { type:"feat", text:"오프/행사·재유입/기타도 다른 채널과 동일하게 '+N개 세부채널' 배지 표시" },
+      { type:"feat", text:"클릭 시 orgMap 기반 유입경로_상세 팝업 표시 (SIMTOS 통합·20건 미만 기타 적용)" }
+    ]
+  },
   {
     version: "2.5.9",
     date: "2026-05-22",
@@ -1709,20 +1718,9 @@ function renderCohortTable() {
     }
 
     if (isSpecial) {
-      // 특수 채널: 딜 기반 요약행 + 조직(rawOrgs) 기반 서브행
-      tr.innerHTML = `
-        <td style="font-weight:600">${g.label}</td>
-        <td>${fmt(g.input)}</td>
-        <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
-        <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
-        <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
-        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
-        <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
-      tbody.appendChild(tr);
-
-      // 서브행: STATE.orgMap 기반 (유입경로_상세) — 딜 수와 무관하게 항상 표시
+      // 특수 채널: orgMap 기반 세부채널 계산 → +N개 배지 + 클릭 팝업
       const _normSub = raw => /simtos/i.test(raw) ? "SIMTOS2026" : raw;
-      const orgSubMap = {}; // name → org 수
+      const orgSubMap = {};
       for (const info of Object.values(STATE.orgMap)) {
         const chTop = (info.channel || "").split(" · ")[0].trim();
         if (chTop !== g.label) continue;
@@ -1730,38 +1728,29 @@ function renderCohortTable() {
         const key = _normSub(raw);
         orgSubMap[key] = (orgSubMap[key] || 0) + 1;
       }
-
-      const mainRows = []; let etcCount = 0;
+      const orgRows = []; let etcCount = 0;
       Object.entries(orgSubMap).forEach(([name, cnt]) => {
         if (cnt < 20) etcCount += cnt;
-        else mainRows.push({ name, count: cnt });
+        else orgRows.push({ name, count: cnt });
       });
-      mainRows.sort((a,b) => b.count - a.count);
-      if (etcCount > 0) mainRows.push({ name:"기타", count: etcCount });
+      orgRows.sort((a,b) => b.count - a.count);
+      if (etcCount > 0) orgRows.push({ name:"기타", count: etcCount });
+      const subCount = orgRows.length;
 
-      if (mainRows.length === 0) {
-        // orgMap 미로드 시 안내
-        const emptyTr = document.createElement("tr");
-        emptyTr.style.cssText = "background:var(--bg-2)";
-        emptyTr.innerHTML = `<td colspan="7" style="padding:6px 28px;font-size:11px;color:var(--fg-4);font-style:italic">조직 데이터 로딩 후 표시됩니다</td>`;
-        tbody.appendChild(emptyTr);
-      } else {
-        mainRows.forEach(m => {
-          const subTr = document.createElement("tr");
-          subTr.style.cssText = "background:var(--bg-2)";
-          subTr.innerHTML = `
-            <td style="padding-left:28px;font-size:12px;color:var(--fg-3);font-weight:400">
-              <span style="color:var(--fg-4);margin-right:4px">└</span>${m.name}
-            </td>
-            <td style="font-size:12px">${fmt(m.count)}</td>
-            <td style="font-size:11px;color:var(--muted)">—</td>
-            <td style="font-size:11px;color:var(--muted)">—</td>
-            <td style="font-size:11px;color:var(--muted)">—</td>
-            <td style="font-size:11px;color:var(--muted)">—</td>
-            <td style="font-size:11px;color:var(--muted)">—</td>`;
-          tbody.appendChild(subTr);
-        });
-      }
+      if (subCount > 0) { tr.style.cssText = "cursor:pointer"; tr.title = "클릭해서 세부 내역 확인"; }
+      tr.innerHTML = `
+        <td style="font-weight:600">
+          <div>${g.label}</div>
+          ${subCount > 0 ? `<div style="font-size:10px;font-weight:500;color:var(--primary-500);margin-top:2px;cursor:pointer">+${subCount}개 세부채널</div>` : ""}
+        </td>
+        <td>${fmt(g.input)}</td>
+        <td>${fmt(g.leads)} <span style="color:var(--muted);font-size:11px">(${pct(g.leads,g.input)})</span></td>
+        <td>${fmt(g.deals)} <span style="color:var(--muted);font-size:11px">(${pct(g.deals,g.input)})</span></td>
+        <td>${isInvestor() ? fmt(g.paid) : maskIfInvestor(fmt(g.paid))}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="width:90px"><div class="bar-fill bar-blue" style="width:${barW}%"></div></div><span style="font-size:12px">${dr}%</span></div></td>
+        <td><span style="font-size:11px;color:var(--muted)">${custBreak}</span></td>`;
+      if (subCount > 0) tr.addEventListener("click", () => _showOrgSubPopup(g.label, orgRows));
+      tbody.appendChild(tr);
     } else {
       // 일반 채널
       tr.innerHTML = `
@@ -1832,6 +1821,53 @@ function _showCohortDetailPopup(group) {
       <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.deals)}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px">${fmt(c.paid)}</td>
       <td style="padding:10px 12px;text-align:right;font-size:13px;color:${Number(dr2)>50?"#16a34a":Number(dr2)>20?"#d97706":"#6b7684"};font-weight:600">${dr2}%</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  body.innerHTML = html;
+  ov.style.display = "flex";
+}
+
+// 오프/행사·재유입/기타 — orgMap 기반 세부채널 팝업
+function _showOrgSubPopup(label, rows) {
+  let ov = document.getElementById("_cohort-detail-ov");
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.id = "_cohort-detail-ov";
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center";
+    ov.addEventListener("click", e => { if (e.target === ov) ov.style.display = "none"; });
+    const box = document.createElement("div");
+    box.style.cssText = "background:#fff;border-radius:12px;padding:0;min-width:440px;max-width:580px;max-height:80vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column";
+    box.addEventListener("click", e => e.stopPropagation());
+    const hdr = document.createElement("div");
+    hdr.id = "_cdp-hdr";
+    hdr.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:18px 24px;border-bottom:1px solid #eee";
+    const title = document.createElement("h3");
+    title.id = "_cdp-title";
+    title.style.cssText = "margin:0;font-size:15px;font-weight:700;color:#1a1a2e";
+    const closeBtn = document.createElement("button");
+    closeBtn.textContent = "×";
+    closeBtn.style.cssText = "border:none;background:none;cursor:pointer;font-size:24px;color:#aaa;line-height:1;padding:0";
+    closeBtn.addEventListener("click", () => ov.style.display = "none");
+    hdr.appendChild(title); hdr.appendChild(closeBtn);
+    const tblWrap = document.createElement("div");
+    tblWrap.id = "_cdp-body";
+    tblWrap.style.cssText = "overflow-y:auto;flex:1";
+    box.appendChild(hdr); box.appendChild(tblWrap);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+  }
+  document.getElementById("_cdp-title").textContent = `${label} — 세부 유입경로 (${rows.length}개)`;
+  const body = document.getElementById("_cdp-body");
+  let html = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr style="background:#f8f9fa">
+      <th style="text-align:left;padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600">유입경로_상세</th>
+      <th style="padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">조직 수</th>
+    </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    html += `<tr style="border-top:1px solid #f0f0f0;${i%2===0?"":"background:#fafafa"}">
+      <td style="padding:10px 16px;font-size:13px">${r.name}</td>
+      <td style="padding:10px 16px;text-align:right;font-size:13px;font-weight:600">${fmt(r.count)}</td>
     </tr>`;
   });
   html += `</tbody></table>`;
