@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.0</title>
+<title>플로우페이 코호트 대시보드 v2.6.1</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.1",
+    date: "2026-05-22",
+    label: "세부채널 팝업 전체 컬럼 + 월간 기간 연동",
+    items: [
+      { type:"feat", text:"세부채널 팝업 컬럼명 '조직 수' → '유입' 변경" },
+      { type:"feat", text:"팝업 전체 컬럼 표시: 유입·리드전환·딜전환·자금집행완료·딜전환율·고객유형" },
+      { type:"feat", text:"월간 기간 선택 시 조직 생성일 기준 유입 필터 적용 (월별 유입기준 데이터)" },
+      { type:"feat", text:"딜전환율 색상 표시: 50% 초과 녹색·20% 초과 주황·이하 회색" }
+    ]
+  },
   {
     version: "2.6.0",
     date: "2026-05-22",
@@ -1718,23 +1729,8 @@ function renderCohortTable() {
     }
 
     if (isSpecial) {
-      // 특수 채널: orgMap 기반 세부채널 계산 → +N개 배지 + 클릭 팝업
-      const _normSub = raw => /simtos/i.test(raw) ? "SIMTOS2026" : raw;
-      const orgSubMap = {};
-      for (const info of Object.values(STATE.orgMap)) {
-        const chTop = (info.channel || "").split(" · ")[0].trim();
-        if (chTop !== g.label) continue;
-        const raw = info.detail || "(없음)";
-        const key = _normSub(raw);
-        orgSubMap[key] = (orgSubMap[key] || 0) + 1;
-      }
-      const orgRows = []; let etcCount = 0;
-      Object.entries(orgSubMap).forEach(([name, cnt]) => {
-        if (cnt < 20) etcCount += cnt;
-        else orgRows.push({ name, count: cnt });
-      });
-      orgRows.sort((a,b) => b.count - a.count);
-      if (etcCount > 0) orgRows.push({ name:"기타", count: etcCount });
+      // 특수 채널: _buildOrgSubRows로 기간 연동 세부채널 계산 → +N개 배지 + 팝업
+      const orgRows = _buildOrgSubRows(g.label);
       const subCount = orgRows.length;
 
       if (subCount > 0) { tr.style.cssText = "cursor:pointer"; tr.title = "클릭해서 세부 내역 확인"; }
@@ -1828,7 +1824,105 @@ function _showCohortDetailPopup(group) {
   ov.style.display = "flex";
 }
 
-// 오프/행사·재유입/기타 — orgMap 기반 세부채널 팝업
+// ══════════════════════════════════════════════
+//  orgMap 기반 세부채널 데이터 빌드 (기간 연동)
+// ══════════════════════════════════════════════
+function _buildOrgSubRows(channelLabel) {
+  const _normSub = raw => /simtos/i.test(raw) ? "SIMTOS2026" : raw;
+
+  // 1. sub-channel별 org ID Set 구성
+  const subOrgIds = {};
+  for (const [orgId, info] of Object.entries(STATE.orgMap)) {
+    const chTop = (info.channel || "").split(" · ")[0].trim();
+    if (chTop !== channelLabel) continue;
+    const key = _normSub(info.detail || "(없음)");
+    if (!subOrgIds[key]) subOrgIds[key] = new Set();
+    subOrgIds[key].add(orgId);
+  }
+
+  // 2. 현재 코호트 기간 범위
+  const type  = STATE.cohortPeriodType  || 'all';
+  const value = STATE.cohortPeriodValue || '';
+  const range = (type !== 'all' && value) ? getFunnelDateRange(type, value) : null;
+
+  const entryKey     = "거래 준비(세일즈 파이프라인)로 진입한 날짜";
+  const leadEntryKey = "거래 준비(리드 파이프라인)로 진입한 날짜";
+  const createdKey   = "생성 날짜";
+
+  // 3. 기간 필터 딜·리드
+  const inRange = (dateStr, r) => {
+    if (!dateStr) return false;
+    const t = new Date(dateStr);
+    return t >= r.from && t <= r.to;
+  };
+  const periodDeals = range
+    ? STATE.rawDeals.filter(d => inRange(d[entryKey] || d["createdAt"] || d["created_at"], range))
+    : STATE.rawDeals;
+  const periodLeads = range
+    ? STATE.rawLeads.filter(d => inRange(d[leadEntryKey] || d["createdAt"] || d["created_at"], range))
+    : STATE.rawLeads;
+
+  // 4. rawOrgs 빠른 조회
+  const rawOrgById = {};
+  for (const org of STATE.rawOrgs) {
+    const id = String(org.id || org.organizationId || "");
+    if (id) rawOrgById[id] = org;
+  }
+
+  // 5. 파이프라인 매핑
+  const mapping   = STATE.pipelineMapping || getPipelineMapping();
+  const wonStages = mapping.filter(m => m.cat === "성사").map(m => m.stage);
+
+  // 6. sub-channel별 통계 계산
+  const rows = [];
+  for (const [name, orgIdSet] of Object.entries(subOrgIds)) {
+    // 유입: 기간 내 생성된 org 수 (range 없으면 전체)
+    let inflow;
+    if (range) {
+      inflow = [...orgIdSet].filter(id => {
+        const org = rawOrgById[id];
+        return org && inRange(org[createdKey] || org["createdAt"], range);
+      }).length;
+    } else {
+      inflow = orgIdSet.size;
+    }
+
+    // 딜·리드: 기간 내, 해당 org
+    const subDeals = periodDeals.filter(d =>
+      orgIdSet.has(String(d.organizationId || d["organization_id"] || ""))
+    );
+    const subLeads = periodLeads.filter(d =>
+      orgIdSet.has(String(d.organizationId || d["organization_id"] || ""))
+    );
+
+    let dealConv = 0, paid = 0, new_ = 0, retention = 0;
+    for (const d of subDeals) {
+      const cur = detectCurrentStage(d, "세일즈 파이프라인");
+      if (cur && wonStages.includes(cur)) dealConv++;
+      if (cur === "자금집행 완료") paid++;
+      if (parseDealPurchaseType(d) === "Repeat") retention++; else new_++;
+    }
+
+    rows.push({ name, inflow, leads: subLeads.length, deals: dealConv, paid, new_, retention });
+  }
+
+  // 7. 20건 미만 → 기타 (유입 기준)
+  const mainRows = [];
+  const etc = { name:"기타", inflow:0, leads:0, deals:0, paid:0, new_:0, retention:0 };
+  rows.forEach(r => {
+    if (r.inflow < 20) {
+      etc.inflow += r.inflow; etc.leads += r.leads; etc.deals += r.deals;
+      etc.paid += r.paid; etc.new_ += r.new_; etc.retention += r.retention;
+    } else {
+      mainRows.push(r);
+    }
+  });
+  mainRows.sort((a, b) => b.inflow - a.inflow);
+  if (etc.inflow > 0) mainRows.push(etc);
+  return mainRows;
+}
+
+// 오프/행사·재유입/기타 — 세부채널 팝업 (전체 컬럼)
 function _showOrgSubPopup(label, rows) {
   let ov = document.getElementById("_cohort-detail-ov");
   if (!ov) {
@@ -1837,7 +1931,7 @@ function _showOrgSubPopup(label, rows) {
     ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:none;align-items:center;justify-content:center";
     ov.addEventListener("click", e => { if (e.target === ov) ov.style.display = "none"; });
     const box = document.createElement("div");
-    box.style.cssText = "background:#fff;border-radius:12px;padding:0;min-width:440px;max-width:580px;max-height:80vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column";
+    box.style.cssText = "background:#fff;border-radius:12px;padding:0;min-width:700px;max-width:880px;max-height:80vh;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.2);display:flex;flex-direction:column";
     box.addEventListener("click", e => e.stopPropagation());
     const hdr = document.createElement("div");
     hdr.id = "_cdp-hdr";
@@ -1857,17 +1951,34 @@ function _showOrgSubPopup(label, rows) {
     ov.appendChild(box);
     document.body.appendChild(ov);
   }
-  document.getElementById("_cdp-title").textContent = `${label} — 세부 유입경로 (${rows.length}개)`;
+
+  const periodLabel = (STATE.cohortPeriodType !== 'all' && STATE.cohortPeriodValue)
+    ? ` · ${STATE.cohortPeriodValue}` : ' · 전체';
+  document.getElementById("_cdp-title").textContent =
+    `${label} — 세부 유입경로 (${rows.length}개)${periodLabel}`;
+
   const body = document.getElementById("_cdp-body");
+  const th = s => `<th style="padding:9px 12px;font-size:11px;color:#6b7684;font-weight:600;text-align:right;white-space:nowrap">${s}</th>`;
   let html = `<table style="width:100%;border-collapse:collapse">
     <thead><tr style="background:#f8f9fa">
-      <th style="text-align:left;padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600">유입경로_상세</th>
-      <th style="padding:10px 16px;font-size:12px;color:#6b7684;font-weight:600;text-align:right">조직 수</th>
+      <th style="text-align:left;padding:9px 12px;font-size:11px;color:#6b7684;font-weight:600">유입경로_상세</th>
+      ${th("유입")}${th("리드 전환")}${th("딜 전환")}${th("자금집행완료")}${th("딜 전환율")}${th("고객 유형")}
     </tr></thead><tbody>`;
+
   rows.forEach((r, i) => {
+    const drPct  = r.inflow ? (r.deals / r.inflow * 100).toFixed(1) : "0.0";
+    const drColor = Number(drPct) > 50 ? "#16a34a" : Number(drPct) > 20 ? "#d97706" : "#6b7684";
+    const typeTot = (r.new_ + r.retention) || 0;
+    const custBreak = typeTot ? `${Math.round(r.new_ / typeTot * 100)}% 신규` : "–";
+    const td = (v, opt="") => `<td style="padding:9px 12px;text-align:right;font-size:12px${opt}">${v}</td>`;
     html += `<tr style="border-top:1px solid #f0f0f0;${i%2===0?"":"background:#fafafa"}">
-      <td style="padding:10px 16px;font-size:13px">${r.name}</td>
-      <td style="padding:10px 16px;text-align:right;font-size:13px;font-weight:600">${fmt(r.count)}</td>
+      <td style="padding:9px 12px;font-size:13px;font-weight:500">${r.name}</td>
+      ${td(fmt(r.inflow),";font-weight:600")}
+      ${td(r.leads ? `${fmt(r.leads)} <span style='color:#aaa;font-size:10px'>(${pct(r.leads,r.inflow)})</span>` : "–")}
+      ${td(r.deals ? `${fmt(r.deals)} <span style='color:#aaa;font-size:10px'>(${pct(r.deals,r.inflow)})</span>` : "–")}
+      ${td(isInvestor() ? fmt(r.paid) : maskIfInvestor(fmt(r.paid)))}
+      ${td(`<span style='color:${drColor};font-weight:600'>${drPct}%</span>`)}
+      ${td(`<span style='color:#6b7684;font-size:11px'>${custBreak}</span>`)}
     </tr>`;
   });
   html += `</tbody></table>`;
