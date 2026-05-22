@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.6.2</title>
+<title>플로우페이 코호트 대시보드 v2.6.3</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -760,6 +760,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.6.3",
+    date: "2026-05-22",
+    label: "오프/행사·재유입/기타 — 월간 필터 시 항상 표시",
+    items: [
+      { type:"fix", text:"월간·주간 등 기간 필터 적용 시 해당 기간 딜이 없어도 오프/행사·재유입/기타 행 항상 표시" },
+      { type:"fix", text:"특수 채널 groupMap 강제 삽입으로 사라짐 버그 수정" }
+    ]
+  },
   {
     version: "2.6.2",
     date: "2026-05-22",
@@ -1705,7 +1714,8 @@ function renderKPI() {
 function renderCohortTable() {
   const cols = filteredCohorts();
   const tbody = $("cohort-rows");
-  if (!cols.length) {
+  // 특수 채널(오프/행사·재유입/기타)은 딜이 없어도 항상 표시하므로 early return 제거
+  if (!cols.length && !STATE.rawOrgs?.length) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</td></tr>`;
     return;
   }
@@ -1722,6 +1732,13 @@ function renderCohortTable() {
   });
 
   const SPECIAL_CHANNELS = new Set(["오프/행사", "재유입/기타"]);
+
+  // 특수 채널은 해당 기간 딜이 없어도 orgMap 기반으로 항상 표시
+  SPECIAL_CHANNELS.forEach(ch => {
+    if (!groupMap[ch]) {
+      groupMap[ch] = { label: ch, items: [], input:0, leads:0, deals:0, paid:0, new_:0, retention:0, reactivated:0 };
+    }
+  });
 
   tbody.innerHTML = "";
   Object.values(groupMap).forEach(g => {
