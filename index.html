@@ -3674,10 +3674,6 @@ document.addEventListener("change", e => {
 });
 
 // Slack
-$("btn-slack").addEventListener("click", () => {
-  document.querySelector('[data-view="sla"]').click();
-  renderSlack();
-});
 $("btn-copy-slack").addEventListener("click", async () => {
   await navigator.clipboard.writeText($("slack-preview").textContent);
   toast("메시지가 복사되었습니다.");
