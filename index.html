@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.4</title>
+<title>플로우페이 코호트 대시보드 v2.8.5</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -278,22 +278,24 @@ tbody tr:hover td{background:var(--primary-50)}
     <!-- ══════ 대시보드 ══════ -->
     <div class="section active" id="view-overview">
       <div class="g g5" id="kpi-grid" style="margin-bottom:16px"></div>
-      <div class="g g-auto">
-        <div class="card">
-          <div class="card-header">
-            <h3>코호트 전환 현황</h3>
-            <div style="display:flex;gap:6px;align-items:center">
-              <select id="cohort-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
-                <option value="all">전체</option>
-                <option value="monthly" selected>월간</option>
-                <option value="quarterly">분기</option>
-                <option value="yearly">연간</option>
-              </select>
-              <select id="cohort-period-value" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px;min-width:90px"></select>
-            </div>
+      <!-- 코호트 전환 현황 — 전체 너비 -->
+      <div class="card">
+        <div class="card-header">
+          <h3>코호트 전환 현황</h3>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="cohort-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
+              <option value="all">전체</option>
+              <option value="monthly" selected>월간</option>
+              <option value="quarterly">분기</option>
+              <option value="yearly">연간</option>
+            </select>
+            <select id="cohort-period-value" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px;min-width:90px"></select>
           </div>
-          <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>자금집행 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
         </div>
+        <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>유입</th><th>리드 전환</th><th>딜 전환</th><th>자금집행 완료</th><th>딜 전환율</th><th>고객 유형</th></tr></thead><tbody id="cohort-rows"></tbody></table></div>
+      </div>
+      <!-- 딜 퍼널 + 구매 유형 분포 -->
+      <div class="g g2" style="margin-top:16px">
         <div class="card">
           <div class="card-header">
             <h3>딜 퍼널</h3>
@@ -308,12 +310,6 @@ tbody tr:hover td{background:var(--primary-50)}
             </div>
           </div>
           <div class="card-body" id="funnel-wrap" style="padding:16px 12px"></div>
-        </div>
-      </div>
-      <div class="g g2" style="margin-top:16px">
-        <div class="card">
-          <div class="card-header"><h3>보고서 데이터 신선도</h3><span class="pill pill-green pill-dot" id="freshness-pill">validated</span></div>
-          <div class="card-body np" id="freshness-list"></div>
         </div>
         <div class="card">
           <div class="card-header">
@@ -415,9 +411,15 @@ tbody tr:hover td{background:var(--primary-50)}
           <div class="card-body" id="flags-list"></div>
         </div>
       </div>
-      <div class="card" style="margin-top:16px">
-        <div class="card-header"><h3>소스 품질 점수 분포</h3><span class="pill pill-gray">100점 기준</span></div>
-        <div class="card-body" id="quality-chart"></div>
+      <div class="g g2" style="margin-top:16px">
+        <div class="card">
+          <div class="card-header"><h3>보고서 데이터 신선도</h3><span class="pill pill-green pill-dot" id="freshness-pill">validated</span></div>
+          <div class="card-body np" id="freshness-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>소스 품질 점수 분포</h3><span class="pill pill-gray">100점 기준</span></div>
+          <div class="card-body" id="quality-chart"></div>
+        </div>
       </div>
     </div>
 
@@ -775,6 +777,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.5",
+    date: "2026-05-23",
+    label: "대시보드 레이아웃 재배치 — 코호트 전체너비·딜퍼널 이동·신선도 이동",
+    items: [
+      { type:"feat", text:"코호트 전환 현황: g-auto(1.4fr+0.6fr) → 전체 너비 단독 카드" },
+      { type:"feat", text:"딜 퍼널: 코호트 우측 → 하단 g2 좌측(구매 유형 분포와 나란히)으로 이동" },
+      { type:"feat", text:"보고서 데이터 신선도: 대시보드 하단 → 데이터 품질 > 소스 품질 점수 분포 왼쪽으로 이동" }
+    ]
+  },
   {
     version: "2.8.4",
     date: "2026-05-23",
