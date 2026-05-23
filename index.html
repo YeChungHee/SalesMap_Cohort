@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.9</title>
+<title>플로우페이 코호트 대시보드 v2.8.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -722,7 +722,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
           <h3>유입 채널별 코호트</h3>
-          <span class="pill pill-gray">이번 주 기준</span>
+          <span class="pill pill-gray" id="weekly-cohort-pill">이번 주 기준</span>
         </div>
         <div class="card-body np tw">
           <div id="weekly-cohort-wrap" style="padding:32px;text-align:center;color:var(--fg-4)">로딩 중…</div>
@@ -733,7 +733,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>세일즈 활동</h3>
-          <span class="pill pill-gray">이번 주 기준</span>
+          <span class="pill pill-gray" id="weekly-period-pill">이번 주 기준</span>
         </div>
         <div class="card-body">
           <div id="weekly-activity-wrap" style="padding:32px;text-align:center;color:var(--fg-4)">로딩 중…</div>
@@ -775,6 +775,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.0",
+    date: "2026-05-23",
+    label: "세일즈 활동 카드 개선 — 클릭 백데이터·기간 표시·제목 스타일",
+    items: [
+      { type:"feat", text:"카드 클릭 시 업체명·날짜 백데이터 패널 토글 (DB생성·상담·심사·TODO·메세지·노트)" },
+      { type:"feat", text:"'이번 주 기준' pill → 실제 기간 MM/DD(요일)~MM/DD(요일) 동적 표시" },
+      { type:"feat", text:"카드 제목 스타일 개선: 아이콘+굵은 글씨+accent 컬러 hover" },
+      { type:"feat", text:"TODO 백데이터: 제목·완료여부·날짜 / 메세지: 건수 30건까지 조직명+유형" }
+    ]
+  },
   {
     version: "2.7.9",
     date: "2026-05-23",
@@ -3345,8 +3356,10 @@ function computeWeeklyActivity(activities, notes, tasks) {
   // ── 노트(Memo) 집계 ──
   // 유형 필드 기반 (전화 상담·고객 미팅·심사 결과) + fallback: text 키워드
   let consult = null, review = null, noteTotal = null, noteEtc = null;
+  let consultItems = [], reviewItems = [], noteItems = [];
   if (notes !== null) {
     const periodNotes = notes.filter(inRange);
+    noteItems = periodNotes;
     noteTotal = periodNotes.length;
     const CONSULT_TYPES = ["전화 상담", "고객 미팅"];
     const REVIEW_TYPES  = ["심사 결과"];
@@ -3356,16 +3369,18 @@ function computeWeeklyActivity(activities, notes, tasks) {
       if (!raw) return [];
       return Array.isArray(raw) ? raw : [raw];
     };
-    consult = periodNotes.filter(n => {
+    consultItems = periodNotes.filter(n => {
       if (getTypes(n).some(t => CONSULT_TYPES.includes(t))) return true;
       const txt = (n.text || n.content || n["내용"] || n["텍스트"] || "").toLowerCase();
       return txt.includes("상담") || txt.includes("미팅");
-    }).length;
-    review = periodNotes.filter(n => {
+    });
+    consult = consultItems.length;
+    reviewItems = periodNotes.filter(n => {
       if (getTypes(n).some(t => REVIEW_TYPES.includes(t))) return true;
       const txt = (n.text || n.content || n["내용"] || n["텍스트"] || "").toLowerCase();
       return txt.includes("심사");
-    }).length;
+    });
+    review = reviewItems.length;
     noteEtc = noteTotal - consult - review;
     if (noteEtc < 0) noteEtc = 0;
   }
@@ -3374,17 +3389,18 @@ function computeWeeklyActivity(activities, notes, tasks) {
   let todo = null;
   if (tasks !== null) {
     const periodTodos = tasks.filter(inRangeTodo);
-    const done    = periodTodos.filter(t =>
+    const doneTodos    = periodTodos.filter(t =>
       t["완료"] === true  || t.completed === true
       || t["완료"] === "완료" || t.status === "완료"
       || t["완료"] === "done"  || t.status === "done"
-    ).length;
+    );
+    const done = doneTodos.length;
     const pending = periodTodos.length - done;
     const meeting = periodTodos.filter(t => {
       const type = t["유형"] || t.type || "";
       return type.includes("미팅") || type.includes("meeting");
     }).length;
-    todo = { total: periodTodos.length, done, pending, meeting };
+    todo = { total: periodTodos.length, done, pending, meeting, items: periodTodos };
   }
 
   // ── 액티비티 집계 (딜+리드) ──
@@ -3395,12 +3411,14 @@ function computeWeeklyActivity(activities, notes, tasks) {
     const sms   = periodActs.filter(a => a.smsId || (a.type||"").toLowerCase().includes("sms") || (a.type||"").includes("문자")).length;
     const email = periodActs.filter(a => a.emailId || a.emailMessageId || (a.type||"").toLowerCase().includes("email") || (a.type||"").toLowerCase().includes("sequence")).length;
     const other = periodActs.length - sms - email;
-    activity = { total: periodActs.length, sms, email, other: other < 0 ? 0 : other };
+    activity = { total: periodActs.length, sms, email, other: other < 0 ? 0 : other, items: periodActs };
   }
 
   return {
-    dbCreated: { orgs: newOrgs.length, leads: newLeads.length },
-    consult, review, noteTotal, noteEtc,
+    dbCreated: { orgs: newOrgs.length, leads: newLeads.length, orgItems: newOrgs, leadItems: newLeads },
+    consult, consultItems,
+    review, reviewItems,
+    noteTotal, noteEtc, noteItems,
     todo,
     activity
   };
@@ -3410,12 +3428,19 @@ function renderWeeklyActivity(data) {
   const wrap = $("weekly-activity-wrap");
   if (!wrap) return;
 
+  // ── 기간 pill 업데이트 (Stage 3) ──
+  const { start, end } = getWeeklyReportRange();
+  const fmtPillDate = d => {
+    const DAY = ["일","월","화","수","목","금","토"];
+    const m = d.getMonth() + 1, dd = d.getDate(), dw = DAY[d.getDay()];
+    return `${m < 10 ? "0"+m : m}/${dd < 10 ? "0"+dd : dd}(${dw})`;
+  };
+  const periodPill = `${fmtPillDate(start)} ~ ${fmtPillDate(end)}`;
+  ["weekly-period-pill","weekly-cohort-pill"].forEach(id => {
+    const el = $(id); if (el) el.textContent = periodPill;
+  });
+
   const NA = `<span style="color:var(--fg-4);font-style:italic;font-size:11px">API 연결 확인 필요</span>`;
-  const card = (title, body) => `
-    <div style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;border:1px solid var(--line-1)">
-      <div style="font-size:11px;font-weight:700;color:var(--fg-4);letter-spacing:.04em;margin-bottom:10px">${title}</div>
-      ${body}
-    </div>`;
   const bigNum = (n, label) => `
     <div style="display:inline-block;margin-right:16px">
       <div style="font-size:22px;font-weight:800;color:var(--fg-1);font-family:var(--font-num);line-height:1">${fmt(n)}</div>
@@ -3424,60 +3449,146 @@ function renderWeeklyActivity(data) {
   const tag = (label, n, color="#6b7684") =>
     `<span style="font-size:11px;color:${color};background:${color}18;border-radius:4px;padding:2px 7px;margin-right:4px">${label} <b>${n}</b></span>`;
 
+  // ── 백데이터 헬퍼 ──
+  const getOrgName = item =>
+    item["이름"] || item.name || item["회사명"] || item["조직명"] || "—";
+  const getNoteOrg = n =>
+    n["조직"] || n["회사"] || n["거래처"] || n.organization?.name || n.deal?.name || "—";
+  const fmtDate = iso => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return `${d.getMonth()+1}/${d.getDate()}`;
+  };
+
+  const bdRow = (name, sub) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--line-1)">
+       <span style="font-size:12px;color:var(--fg-1);font-weight:500">${name}</span>
+       <span style="font-size:11px;color:var(--fg-4)">${sub}</span>
+     </div>`;
+  const bdWrap = (id, rows) =>
+    `<div id="bd-${id}" style="display:none;margin-top:10px;padding-top:8px;border-top:2px solid var(--line-1)">
+       <div style="font-size:10px;font-weight:700;color:var(--fg-4);letter-spacing:.06em;margin-bottom:6px">업체 상세</div>
+       ${rows || '<span style="font-size:11px;color:var(--fg-4)">해당 항목 없음</span>'}
+     </div>`;
+
+  // ── 카드 생성자 (Stage 4: 스타일 개선 + 클릭 핸들러) ──
+  const card = (id, accentColor, icon, title, body, bdContent) => `
+    <div id="card-${id}" onclick="toggleActivityBackdata('${id}')"
+         style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;
+                border:1px solid var(--line-1);cursor:pointer;transition:border-color .15s"
+         onmouseenter="this.style.borderColor='${accentColor}44'"
+         onmouseleave="this.style.borderColor='var(--line-1)'">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+        <span style="display:inline-flex;align-items:center;justify-content:center;
+                     width:20px;height:20px;border-radius:5px;font-size:12px;
+                     background:${accentColor}18">${icon}</span>
+        <span style="font-size:12px;font-weight:800;color:var(--fg-1);letter-spacing:.01em">${title}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--fg-4)" id="bd-arrow-${id}">▾</span>
+      </div>
+      ${body}
+      ${bdWrap(id, bdContent)}
+    </div>`;
+
   let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">`;
 
   // ① DB 생성
-  html += card("DB 생성",
-    bigNum(data.dbCreated.orgs, "신규 조직") +
-    bigNum(data.dbCreated.leads, "신규 리드")
+  const orgRows = (data.dbCreated.orgItems||[]).map(o =>
+    bdRow(getOrgName(o), fmtDate(o.createdAt||o["created_at"]||o["생성일"])+" 생성")
+  ).join("") +
+  (data.dbCreated.leadItems||[]).map(l =>
+    bdRow(getOrgName(l), fmtDate(l.createdAt||l["created_at"]||l["생성일"])+" 신규리드")
+  ).join("");
+  html += card("db", "#2563eb", "🏢", "DB 생성",
+    bigNum(data.dbCreated.orgs, "신규 조직") + bigNum(data.dbCreated.leads, "신규 리드"),
+    orgRows
   );
 
-  // ② 상담 활동 (노트: 전화 상담 + 고객 미팅)
-  html += card("상담 활동",
+  // ② 상담 활동
+  const consultRows = (data.consultItems||[]).map(n =>
+    bdRow(getNoteOrg(n), `${(n["유형"]||[n.type||"상담"])[0] || "상담"} · ${fmtDate(n.createdAt||n["created_at"])}`)
+  ).join("");
+  html += card("consult", "#2563eb", "💬", "상담 활동",
     data.consult === null ? NA :
     `${bigNum(data.consult, "상담 건")}
-     <div style="margin-top:6px">
-       ${tag("전화상담+고객미팅", data.consult, "#2563eb")}
-     </div>`
+     <div style="margin-top:6px">${tag("전화상담+고객미팅", data.consult, "#2563eb")}</div>`,
+    consultRows
   );
 
-  // ③ 심사 활동 (노트: 심사 결과)
-  html += card("심사",
+  // ③ 심사
+  const reviewRows = (data.reviewItems||[]).map(n =>
+    bdRow(getNoteOrg(n), `심사 · ${fmtDate(n.createdAt||n["created_at"])}`)
+  ).join("");
+  html += card("review", "#9333ea", "📋", "심사",
     data.review === null ? NA :
     `${bigNum(data.review, "심사 건")}
-     <div style="margin-top:6px">${tag("심사 결과 노트", data.review, "#9333ea")}</div>`
+     <div style="margin-top:6px">${tag("심사 결과 노트", data.review, "#9333ea")}</div>`,
+    reviewRows
   );
 
   // ④ TODO
-  html += card("TODO",
+  const todoRows = (data.todo?.items||[]).map(t => {
+    const isDone = t["완료"]===true||t.completed===true||t["완료"]==="완료"||t.status==="완료";
+    const title  = t["제목"] || t.title || t["이름"] || t.name || "—";
+    const org    = t["조직"] || t["회사"] || t.organization?.name || "";
+    return bdRow(
+      title + (org ? ` <span style="color:var(--fg-4)">(${org})</span>` : ""),
+      (isDone ? `<span style="color:#16a34a">✓완료</span>` : `<span style="color:#f59e0b">미완료</span>`)
+      + ` · ${fmtDate(t["시작일"]||t.startDate||t.createdAt)}`
+    );
+  }).join("");
+  html += card("todo", "#16a34a", "✅", "TODO",
     data.todo === null ? NA :
     `${bigNum(data.todo.done, "완료")}${bigNum(data.todo.pending, "미완료")}
      <div style="margin-top:6px">
        ${tag("전체", data.todo.total)}
        ${data.todo.meeting > 0 ? tag("미팅 포함", data.todo.meeting, "#16a34a") : ""}
-     </div>`
+     </div>`,
+    todoRows
   );
 
-  // ⑤ 문자/이메일 활동
-  html += card("메세지 활동",
+  // ⑤ 메세지 활동
+  const actRows = (data.activity?.items||[]).slice(0,30).map(a => {
+    const isSms   = a.smsId || (a.type||"").toLowerCase().includes("sms");
+    const isEmail = a.emailId || a.emailMessageId || (a.type||"").toLowerCase().includes("email");
+    const typeLabel = isSms ? "문자" : isEmail ? "이메일" : (a.type||"활동");
+    const org = a["조직"] || a["회사"] || a.organization?.name || a.contact?.name || "—";
+    return bdRow(org, `${typeLabel} · ${fmtDate(a.date||a.createdAt)}`);
+  }).join("") + (data.activity?.items?.length > 30
+    ? `<div style="font-size:11px;color:var(--fg-4);text-align:center;padding:6px 0">… 외 ${data.activity.items.length-30}건</div>` : "");
+  html += card("activity", "#0ea5e9", "📨", "메세지 활동",
     data.activity === null ? NA :
     `${bigNum(data.activity.sms, "문자(SMS)")}${bigNum(data.activity.email, "이메일·시퀀스")}
-     <div style="margin-top:6px">${tag("전체 활동", data.activity.total)}</div>`
+     <div style="margin-top:6px">${tag("전체 활동", data.activity.total)}</div>`,
+    actRows
   );
 
-  // ⑥ 노트 전체 요약
-  html += card("노트 전체",
+  // ⑥ 노트 전체
+  const noteRows = (data.noteItems||[]).map(n => {
+    const types = Array.isArray(n["유형"]) ? n["유형"] : [n["유형"]||n.type||"기타"];
+    return bdRow(getNoteOrg(n), `${types[0]||"기타"} · ${fmtDate(n.createdAt||n["created_at"])}`);
+  }).join("");
+  html += card("notes", "#f59e0b", "📝", "노트 전체",
     data.noteTotal === null ? NA :
     `${bigNum(data.noteTotal, "전체 노트")}
      <div style="margin-top:6px">
        ${tag("상담", data.consult ?? 0, "#2563eb")}
        ${tag("심사", data.review ?? 0, "#9333ea")}
        ${tag("기타", data.noteEtc ?? 0)}
-     </div>`
+     </div>`,
+    noteRows
   );
 
   html += `</div>`;
   wrap.innerHTML = html;
+}
+
+function toggleActivityBackdata(id) {
+  const panel = document.getElementById(`bd-${id}`);
+  const arrow = document.getElementById(`bd-arrow-${id}`);
+  if (!panel) return;
+  const isOpen = panel.style.display !== "none";
+  panel.style.display = isOpen ? "none" : "block";
+  if (arrow) arrow.textContent = isOpen ? "▾" : "▴";
 }
 
 // ══════════════════════════════════════════════
