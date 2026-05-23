@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.2</title>
+<title>플로우페이 코호트 대시보드 v2.10.3</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -105,6 +105,7 @@ select.ctrl:focus,input.ctrl:focus{outline:none;border-color:var(--primary-400)}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+.g6{grid-template-columns:repeat(6,minmax(0,1fr))}
 .g-auto{grid-template-columns:minmax(0,1.4fr) minmax(280px,.6fr)}
 
 /* ── 카드 ── */
@@ -201,9 +202,43 @@ tbody tr:hover td{background:var(--primary-50)}
 @media(max-width:1100px){
   #sidebar{display:none}
   .g5{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .g6{grid-template-columns:repeat(3,minmax(0,1fr))}
   .g4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .g-auto{grid-template-columns:1fr}
 }
+
+/* ── 이용 고객 모달 ── */
+#active-customers-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9990;
+  display:none;align-items:flex-start;justify-content:flex-end}
+#active-customers-overlay.open{display:flex}
+#active-customers-panel{
+  width:360px;max-width:95vw;height:100vh;background:var(--bg-0);
+  border-left:1px solid var(--line-1);box-shadow:var(--shadow-lg);
+  display:flex;flex-direction:column;animation:slideInRight .22s ease}
+@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
+#active-customers-panel .acm-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:18px 20px;border-bottom:1px solid var(--line-1);flex-shrink:0}
+#active-customers-panel .acm-title{font-size:15px;font-weight:700;color:var(--fg-1)}
+#active-customers-panel .acm-close{
+  background:none;border:none;cursor:pointer;color:var(--fg-3);
+  padding:4px;border-radius:6px;line-height:0}
+#active-customers-panel .acm-close:hover{background:var(--bg-2);color:var(--fg-1)}
+#active-customers-panel .acm-meta{
+  padding:12px 20px;background:var(--bg-1);border-bottom:1px solid var(--line-1);
+  font-size:12px;color:var(--fg-4);flex-shrink:0}
+#active-customers-panel .acm-list{flex:1;overflow-y:auto;padding:8px 0}
+#active-customers-panel .acm-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;border-bottom:1px solid var(--line-2)}
+#active-customers-panel .acm-item:last-child{border-bottom:none}
+#active-customers-panel .acm-name{font-size:13px;color:var(--fg-1);font-weight:500}
+#active-customers-panel .acm-badge{
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;flex-shrink:0}
+#active-customers-panel .badge-jiphaeng{background:#dcfce7;color:#15803d}
+#active-customers-panel .badge-paid{background:#dbeafe;color:#1d4ed8}
+#active-customers-panel .badge-delay{background:#fef9c3;color:#854d0e}
 </style>
 </head>
 <body>
@@ -279,7 +314,7 @@ tbody tr:hover td{background:var(--primary-50)}
 
     <!-- ══════ 대시보드 ══════ -->
     <div class="section active" id="view-overview">
-      <div class="g g5" id="kpi-grid" style="margin-bottom:16px"></div>
+      <div class="g g6" id="kpi-grid" style="margin-bottom:16px"></div>
       <!-- 코호트 전환 현황 — 전체 너비 -->
       <div class="card">
         <div class="card-header">
@@ -861,6 +896,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.10.3",
+    date: "2026-05-24",
+    label: "이용 고객 KPI 카드 추가 — 자금집행+결제 완료 업체 현황",
+    items: [
+      { type:"feat", text:"computeActiveCustomers(deals) — PAID_STAGES 딜 중 organizationId 기준 중복 제거, badge 우선순위(자금집행>결제>지연)" },
+      { type:"feat", text:"STATE.activeCustomers — 기간 필터 연동 (recomputeForPeriod 내 자동 갱신)" },
+      { type:"feat", text:"KPI 그리드 6열로 확장 (g5 → g6), 이용 고객 카드 녹색 스타일" },
+      { type:"feat", text:"이용 고객 카드 클릭 → 슬라이드 패널 — 업체명 + 유형 배지(자금집행/결제완료/결제지연) 목록" }
+    ]
+  },
   {
     version: "2.10.2",
     date: "2026-05-23",
@@ -1913,6 +1959,7 @@ const STATE = {
   regressions:     [],
   funnelData:        null,      // null = 미로드
   pipelineMetrics:   null,      // null = 미로드
+  activeCustomers:   null,      // 이용 고객 { count, companies:[{name,type}] }
   allDeals:          [],         // 전기간 원본 딜 목록 (덮어쓰기 금지 — 기간 필터 기준)
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
   rawLeads:          [],         // 원본 리드 목록 (기간 필터 재계산용)
@@ -2123,9 +2170,9 @@ function renderKPI() {
   const pm = STATE.pipelineMetrics;
   if (!pm && !STATE.dataLoaded) {
     const loading = STATE.dataLoading;
-    $("kpi-grid").innerHTML = Array(5).fill(0).map((_, i) => `
+    $("kpi-grid").innerHTML = Array(6).fill(0).map((_, i) => `
       <div class="card kpi">
-        <div class="kpi-label">${["총 유입","리드 전환","딜 성사","결제 완료","평균 사이클"][i]}</div>
+        <div class="kpi-label">${["총 유입","리드 전환","딜 성사","결제 완료","평균 사이클","이용 고객"][i]}</div>
         <div class="kpi-value" style="color:var(--fg-4)">${loading ? "…" : "–"}</div>
         <div class="kpi-sub" style="color:var(--fg-4)">${loading ? "로딩 중" : "데이터 없음"}</div>
       </div>`).join("");
@@ -2134,6 +2181,7 @@ function renderKPI() {
   const dealRate = t.input ? (t.deals / t.input * 100).toFixed(1) : 0;
   const payRate  = t.deals ? (t.paid  / t.deals * 100).toFixed(1) : 0;
   const avgCycle = pm?.avgCycleP50 ?? "–";
+  const ac = STATE.activeCustomers;
   const cards = [
     { label:"총 유입",        value: t.input ? fmt(t.input) : (pm?.totalDeals ? fmt(pm.totalDeals) : "–"), sub:"이번 기간 누적" },
     { label:"리드 전환",       value: t.leads ? fmt(t.leads) : "–",  sub:`전환율 ${t.input ? pct(t.leads,t.input) : "–"}` },
@@ -2141,12 +2189,21 @@ function renderKPI() {
     { label:"결제 완료",       value: pm ? fmt(pm.paidDeals ?? pm.wonDeals) : (t.paid ? fmt(t.paid) : "–"), sub: pm ? "결제 완료 누적" : `딜 대비 ${payRate}%` },
     { label:"평균 영업 사이클", value: avgCycle !== "–" ? `${avgCycle}일` : "–", sub:"성사 딜 P50 기준" }
   ];
-  $("kpi-grid").innerHTML = cards.map(c => `
+  const regularCards = cards.map(c => `
     <div class="card kpi">
       <div class="kpi-label">${c.label}</div>
       <div class="kpi-value">${c.value}</div>
       <div class="kpi-sub">${c.sub}</div>
     </div>`).join("");
+  const acCount = ac ? ac.count : 0;
+  const activeCard = `
+    <div class="card kpi" id="kpi-active-customers" style="cursor:pointer;border-color:#bbf7d0;transition:box-shadow .15s" onmouseenter="this.style.boxShadow='0 0 0 2px #22c55e55'" onmouseleave="this.style.boxShadow=''" onclick="showActiveCustomersModal()">
+      <div class="kpi-label" style="color:#15803d">이용 고객</div>
+      <div class="kpi-value" style="color:#16a34a">${acCount ? acCount + "개사" : "–"}</div>
+      <div class="kpi-sub" style="color:#4ade80">자금집행 + 결제 완료</div>
+      ${acCount ? `<div style="font-size:10px;color:#86efac;margin-top:2px">클릭 시 업체명 확인 ↗</div>` : ""}
+    </div>`;
+  $("kpi-grid").innerHTML = regularCards + activeCard;
 }
 
 // 코호트 테이블
@@ -5368,6 +5425,39 @@ function parseDealPurchaseType(deal) {
 //  - 구매이력 = "Repeat" + 직전 거래일 > 6개월  → 재활성화
 const PAID_STAGES = ["결제 완료", "결제 지연", "자금집행 완료"];
 const LOST_STAGES = ["진행 거절","신청 취소","보류 서류/계약"];
+
+// ── 이용 고객 집계 (자금집행 완료 + 결제 완료, 중복 제거) ──────────────────────
+function computeActiveCustomers(deals) {
+  // 우선순위: 자금집행 완료(0) > 결제 완료(1) > 결제 지연(2)
+  const PRIORITY = ["자금집행 완료", "결제 완료", "결제 지연"];
+  const orgMap = {};
+  for (const deal of deals) {
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    if (!cur || !PAID_STAGES.includes(cur)) continue;
+    // 조직 ID 또는 이름을 키로 사용
+    const orgId   = deal.organizationId || deal.organization_id || null;
+    const orgName = deal["업체명"] || deal["organization_name"] || deal["organizationName"]
+                  || deal["company"] || (orgId && STATE.orgMap[orgId]?.name)
+                  || orgId || "미상";
+    const key = orgId || orgName;
+    const pri = PRIORITY.indexOf(cur);
+    if (!orgMap[key]) {
+      orgMap[key] = { name: orgName, type: cur, priority: pri };
+    } else if (pri < orgMap[key].priority) {
+      orgMap[key].type = cur;
+      orgMap[key].priority = pri;
+    }
+  }
+  const companies = Object.values(orgMap)
+    .map(o => ({ name: o.name, type: o.type }))
+    .sort((a, b) => {
+      const pa = PRIORITY.indexOf(a.type), pb = PRIORITY.indexOf(b.type);
+      if (pa !== pb) return pa - pb;
+      return a.name.localeCompare(b.name, "ko");
+    });
+  return { count: companies.length, companies };
+}
+
 function computeCustomerTypeData(allDeals, periodType, periodValue) {
   // 결제 완료 / 결제 지연 단계 딜만 추출 — 거래일 기준
   const wonDeals = allDeals
@@ -6083,6 +6173,7 @@ function recomputeForPeriod(deals, leads = []) {
   }
 
   STATE.regressions = detectRegressions(deals, mapping);
+  STATE.activeCustomers = computeActiveCustomers(deals);
 }
 
 // 실데이터 전체 로딩
@@ -6462,6 +6553,35 @@ async function handleRefreshDwellHeatmap() {
   }
 }
 
+// ── 이용 고객 모달 ────────────────────────────────────────────
+function showActiveCustomersModal() {
+  const ac = STATE.activeCustomers;
+  if (!ac) return;
+  const BADGE = {
+    "자금집행 완료": ["badge-jiphaeng", "자금집행"],
+    "결제 완료":     ["badge-paid",     "결제 완료"],
+    "결제 지연":     ["badge-delay",    "결제 지연"],
+  };
+  const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
+  $("acm-meta-bar").textContent = `총 ${ac.count}개사 · 자금집행 완료 + 결제 완료 기준${periodLabel}`;
+  $("acm-list").innerHTML = ac.companies.length
+    ? ac.companies.map(c => {
+        const [cls, txt] = BADGE[c.type] || ["badge-paid", c.type];
+        const safeName = c.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        return `<div class="acm-item">
+          <span class="acm-name">${safeName}</span>
+          <span class="acm-badge ${cls}">${txt}</span>
+        </div>`;
+      }).join("")
+    : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 이용 고객 없음</div>`;
+  const overlay = document.getElementById("active-customers-overlay");
+  overlay.classList.add("open");
+  overlay.onclick = e => { if (e.target === overlay) closeActiveCustomersModal(); };
+}
+function closeActiveCustomersModal() {
+  document.getElementById("active-customers-overlay").classList.remove("open");
+}
+
 // 1분마다 자동 갱신 (SLA 카운트다운)
 setInterval(() => { renderSLA(); $("topbar-asof").textContent = "기준: " + now(); }, 60000);
 
@@ -6469,5 +6589,19 @@ setInterval(() => { renderSLA(); $("topbar-asof").textContent = "기준: " + now
 renderAll();
 loadRealData();
 </script>
+
+<!-- 이용 고객 슬라이드 패널 -->
+<div id="active-customers-overlay">
+  <div id="active-customers-panel">
+    <div class="acm-header">
+      <span class="acm-title">이용 고객 목록</span>
+      <button class="acm-close" onclick="closeActiveCustomersModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="acm-meta" id="acm-meta-bar">자금집행 완료 + 결제 완료 업체 (중복 제거)</div>
+    <div class="acm-list" id="acm-list"></div>
+  </div>
+</div>
 </body>
 </html>
