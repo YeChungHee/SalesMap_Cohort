@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.2</title>
+<title>플로우페이 코호트 대시보드 v2.8.3</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -59,7 +59,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 /* ── 사이드바 ── */
 #sidebar{width:var(--sidebar);background:var(--gray-950);color:var(--gray-400);flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
 .sb-brand{display:flex;gap:10px;align-items:center;padding:20px 16px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
-.sb-mark{width:32px;height:32px;border-radius:var(--radius-md);background:linear-gradient(135deg,var(--primary-500),var(--success-500));flex-shrink:0}
+.sb-mark{width:32px;height:32px;border-radius:var(--radius-md);flex-shrink:0;overflow:hidden}
 .sb-name{font-weight:800;font-size:13px;color:var(--gray-50);letter-spacing:.01em}
 .sb-ver{font-size:11px;color:var(--gray-600);margin-top:1px}
 .sb-nav{padding:12px 8px;flex:1}
@@ -209,7 +209,25 @@ tbody tr:hover td{background:var(--primary-50)}
 <!-- ── 사이드바 ── -->
 <div id="sidebar">
   <div class="sb-brand">
-    <div class="sb-mark"></div>
+    <div class="sb-mark"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="32" height="32">
+  <rect width="500" height="500" rx="90" fill="#9b8878"/>
+  <g fill="white">
+    <!-- F: 왼쪽 세로 바 -->
+    <rect x="60" y="100" width="80" height="300"/>
+    <!-- F: 상단 가로 바 -->
+    <rect x="60" y="100" width="210" height="75"/>
+    <!-- F: 중단 가로 바 -->
+    <rect x="60" y="232" width="160" height="68"/>
+    <!-- F 대각선 슬래시: 하단-좌 → 상단-우 방향 흰색 바 (로고 특징) -->
+    <polygon points="118,400 198,400 330,100 250,100"/>
+    <!-- P: 세로 바 -->
+    <rect x="285" y="100" width="80" height="300"/>
+    <!-- P: 볼(bowl) 외곽 -->
+    <path d="M365 100 C470 100 470 100 470 200 C470 300 470 300 365 300 L365 100Z"/>
+    <!-- P: 볼 내부 컷아웃 -->
+    <path d="M365 162 C425 162 425 162 425 200 C425 238 425 238 365 238 L365 162Z" fill="#9b8878"/>
+  </g>
+</svg></div>
     <div>
       <div class="sb-name">FlowPay Cohort</div>
       <div class="sb-ver" id="sb-ver">v1.0 · Phase 1</div>
@@ -775,6 +793,14 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.3",
+    date: "2026-05-23",
+    label: "FlowPay 로고 SVG 교체 — 사이드바 앱 아이콘",
+    items: [
+      { type:"feat", text:"사이드바 앱 아이콘: 그라디언트 → FlowPay FP 모노그램 SVG (베이지 배경+대각선 슬래시)" }
+    ]
+  },
   {
     version: "2.8.2",
     date: "2026-05-23",
