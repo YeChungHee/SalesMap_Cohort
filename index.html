@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.3</title>
+<title>플로우페이 코호트 대시보드 v2.10.4</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -292,7 +292,8 @@ tbody tr:hover td{background:var(--primary-50)}
         <option value="read_only">👁 읽기 전용</option>
       </select>
       <select class="ctrl" id="ctrl-period">
-        <option value="2026-05">2026년 5월</option>
+        <option value="all">전체 기간</option>
+        <option value="2026-05" selected>2026년 5월</option>
         <option value="2026-04">2026년 4월</option>
         <option value="2026-03">2026년 3월</option>
         <option value="2026-Q2">2026 Q2</option>
@@ -896,6 +897,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.10.4",
+    date: "2026-05-24",
+    label: "상단 기간 드롭다운 전체 기간 옵션 추가",
+    items: [
+      { type:"feat", text:"ctrl-period 드롭다운 최상단에 '전체 기간' (value='all') 옵션 추가" },
+      { type:"feat", text:"syncCardDropdownsToPeriod('all') — 전체 기간 선택 시 카드 내부 드롭다운을 현재 월로 리셋" }
+    ]
+  },
   {
     version: "2.10.3",
     date: "2026-05-24",
@@ -1741,7 +1751,14 @@ function dealMatchesPeriod(deal, range) {
 
 // 상위 period 드롭다운 → 퍼널·구매유형 카드 내부 드롭다운 동기화
 function syncCardDropdownsToPeriod(period) {
-  if (/^\d{4}-\d{2}$/.test(period)) {
+  if (!period || period === "all") {
+    // 전체 기간 선택 시 카드 내부 드롭다운을 현재 월로 리셋
+    const now = new Date();
+    const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    STATE.funnelPeriodType  = 'monthly'; STATE.funnelPeriodValue  = curMonth;
+    STATE.custPeriodType    = 'monthly'; STATE.custPeriodValue    = curMonth;
+    STATE.cohortPeriodType  = 'monthly'; STATE.cohortPeriodValue  = curMonth;
+  } else if (/^\d{4}-\d{2}$/.test(period)) {
     STATE.funnelPeriodType  = 'monthly'; STATE.funnelPeriodValue  = period;
     STATE.custPeriodType    = 'monthly'; STATE.custPeriodValue    = period;
     STATE.cohortPeriodType  = 'monthly'; STATE.cohortPeriodValue  = period;
