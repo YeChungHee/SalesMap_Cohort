@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.0</title>
+<title>플로우페이 코호트 대시보드 v2.8.1</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -775,6 +775,14 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.1",
+    date: "2026-05-23",
+    label: "세일즈 활동 카드 아이콘 — 이모지 → Lucide SVG",
+    items: [
+      { type:"fix", text:"이모지 아이콘(🏢💬📋✅📨📝) → Lucide 스타일 stroke SVG로 교체 (비즈니스 톤)" }
+    ]
+  },
   {
     version: "2.8.0",
     date: "2026-05-23",
@@ -3471,7 +3479,17 @@ function renderWeeklyActivity(data) {
        ${rows || '<span style="font-size:11px;color:var(--fg-4)">해당 항목 없음</span>'}
      </div>`;
 
-  // ── 카드 생성자 (Stage 4: 스타일 개선 + 클릭 핸들러) ──
+  // ── SVG 아이콘 (Lucide 스타일 — stroke, 14×14) ──
+  const ICONS = {
+    db: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>`,
+    consult: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`,
+    review: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 12 2 2 4-4"/></svg>`,
+    todo: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
+    activity: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`,
+    notes: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
+  };
+
+  // ── 카드 생성자 (클릭 핸들러 + 아이콘 + 제목) ──
   const card = (id, accentColor, icon, title, body, bdContent) => `
     <div id="card-${id}" onclick="toggleActivityBackdata('${id}')"
          style="background:var(--bg-2);border-radius:var(--radius-md);padding:14px 16px;
@@ -3480,7 +3498,7 @@ function renderWeeklyActivity(data) {
          onmouseleave="this.style.borderColor='var(--line-1)'">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
         <span style="display:inline-flex;align-items:center;justify-content:center;
-                     width:20px;height:20px;border-radius:5px;font-size:12px;
+                     width:20px;height:20px;border-radius:5px;color:${accentColor};
                      background:${accentColor}18">${icon}</span>
         <span style="font-size:12px;font-weight:800;color:var(--fg-1);letter-spacing:.01em">${title}</span>
         <span style="margin-left:auto;font-size:10px;color:var(--fg-4)" id="bd-arrow-${id}">▾</span>
@@ -3498,7 +3516,7 @@ function renderWeeklyActivity(data) {
   (data.dbCreated.leadItems||[]).map(l =>
     bdRow(getOrgName(l), fmtDate(l.createdAt||l["created_at"]||l["생성일"])+" 신규리드")
   ).join("");
-  html += card("db", "#2563eb", "🏢", "DB 생성",
+  html += card("db", "#2563eb", ICONS.db, "DB 생성",
     bigNum(data.dbCreated.orgs, "신규 조직") + bigNum(data.dbCreated.leads, "신규 리드"),
     orgRows
   );
@@ -3507,7 +3525,7 @@ function renderWeeklyActivity(data) {
   const consultRows = (data.consultItems||[]).map(n =>
     bdRow(getNoteOrg(n), `${(n["유형"]||[n.type||"상담"])[0] || "상담"} · ${fmtDate(n.createdAt||n["created_at"])}`)
   ).join("");
-  html += card("consult", "#2563eb", "💬", "상담 활동",
+  html += card("consult", "#2563eb", ICONS.consult, "상담 활동",
     data.consult === null ? NA :
     `${bigNum(data.consult, "상담 건")}
      <div style="margin-top:6px">${tag("전화상담+고객미팅", data.consult, "#2563eb")}</div>`,
@@ -3518,7 +3536,7 @@ function renderWeeklyActivity(data) {
   const reviewRows = (data.reviewItems||[]).map(n =>
     bdRow(getNoteOrg(n), `심사 · ${fmtDate(n.createdAt||n["created_at"])}`)
   ).join("");
-  html += card("review", "#9333ea", "📋", "심사",
+  html += card("review", "#9333ea", ICONS.review, "심사",
     data.review === null ? NA :
     `${bigNum(data.review, "심사 건")}
      <div style="margin-top:6px">${tag("심사 결과 노트", data.review, "#9333ea")}</div>`,
@@ -3536,7 +3554,7 @@ function renderWeeklyActivity(data) {
       + ` · ${fmtDate(t["시작일"]||t.startDate||t.createdAt)}`
     );
   }).join("");
-  html += card("todo", "#16a34a", "✅", "TODO",
+  html += card("todo", "#16a34a", ICONS.todo, "TODO",
     data.todo === null ? NA :
     `${bigNum(data.todo.done, "완료")}${bigNum(data.todo.pending, "미완료")}
      <div style="margin-top:6px">
@@ -3555,7 +3573,7 @@ function renderWeeklyActivity(data) {
     return bdRow(org, `${typeLabel} · ${fmtDate(a.date||a.createdAt)}`);
   }).join("") + (data.activity?.items?.length > 30
     ? `<div style="font-size:11px;color:var(--fg-4);text-align:center;padding:6px 0">… 외 ${data.activity.items.length-30}건</div>` : "");
-  html += card("activity", "#0ea5e9", "📨", "메세지 활동",
+  html += card("activity", "#0ea5e9", ICONS.activity, "메세지 활동",
     data.activity === null ? NA :
     `${bigNum(data.activity.sms, "문자(SMS)")}${bigNum(data.activity.email, "이메일·시퀀스")}
      <div style="margin-top:6px">${tag("전체 활동", data.activity.total)}</div>`,
@@ -3567,7 +3585,7 @@ function renderWeeklyActivity(data) {
     const types = Array.isArray(n["유형"]) ? n["유형"] : [n["유형"]||n.type||"기타"];
     return bdRow(getNoteOrg(n), `${types[0]||"기타"} · ${fmtDate(n.createdAt||n["created_at"])}`);
   }).join("");
-  html += card("notes", "#f59e0b", "📝", "노트 전체",
+  html += card("notes", "#f59e0b", ICONS.notes, "노트 전체",
     data.noteTotal === null ? NA :
     `${bigNum(data.noteTotal, "전체 노트")}
      <div style="margin-top:6px">
