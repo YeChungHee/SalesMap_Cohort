@@ -776,6 +776,27 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.7.5",
+    date: "2026-05-23",
+    label: "설정 내보내기/가져오기 — 기기 간 API 키 동기화",
+    items: [
+      { type:"feat", text:"연동 설정에 '설정 내보내기' 버튼 추가 — 13개 localStorage 키를 JSON 파일로 저장" },
+      { type:"feat", text:"'설정 가져오기' 버튼 추가 — JSON 파일 선택 시 모든 API 키·설정 즉시 복원 후 자동 새로고침" },
+      { type:"fix",  text:"btn-slack 제거 후 남은 addEventListener null 오류 수정 (v2.7.4)" },
+      { type:"fix",  text:"상단 네비게이션 'Slack 통보' 버튼 제거 (v2.7.3)" }
+    ]
+  },
+  {
+    version: "2.7.2",
+    date: "2026-05-23",
+    label: "주간 보고서 3개 버그 수정 — Race Condition·TODO 날짜·완료 상태",
+    items: [
+      { type:"fix", text:"Race Condition 수정: btn-weekly-save/md async화, STATE.weeklyActivity 없으면 renderWeeklyReport() 먼저 await" },
+      { type:"fix", text:"inRangeTodo 헬퍼 추가: startDate·startAt·dueDate·endDate 등 SalesMap TODO API 날짜 필드 전체 지원" },
+      { type:"fix", text:"TODO 완료 상태 타입 추가: '완료' 문자열·status='완료' 비교 (boolean 외)" }
+    ]
+  },
+  {
     version: "2.7.1",
     date: "2026-05-23",
     label: "데이터 품질 — API 응답 검증 패널 추가",
