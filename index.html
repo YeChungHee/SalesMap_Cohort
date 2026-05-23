@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.1</title>
+<title>플로우페이 코호트 대시보드 v2.10.2</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -862,6 +862,21 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.10.2",
+    date: "2026-05-23",
+    label: "글로벌 기간 필터 통합 — KPI·코호트·퍼널·구매유형 period 연동",
+    items: [
+      { type:"feat", text:"getPeriodDateRange() — '2026-04'·'2026-Q2' → {from, to} 날짜 범위 변환" },
+      { type:"feat", text:"dealMatchesPeriod() — 딜 기간 판별 (파이프라인 진입일 → 거래일 → createdAt 폴백)" },
+      { type:"feat", text:"syncCardDropdownsToPeriod() — 퍼널·구매유형·코호트 카드 내부 드롭다운 자동 동기화" },
+      { type:"feat", text:"recomputeForPeriod(deals, leads) — 기간 의존 통계만 재계산 (cohortsBySource·pipelineMetrics·cycles·funnelData)" },
+      { type:"refactor", text:"computeFromDeals() → 월별 코호트·히트맵·자금집행이력은 allDeals 전기간 기준 유지" },
+      { type:"feat", text:"STATE.allDeals — 전기간 원본 백업 필드 추가 (loadRealData 최초 1회 저장)" },
+      { type:"fix", text:"구매 유형 분포 orgSeenInPeriod 제거 — 동일 업체 복수 건 각각 집계 (월별 추이와 동일)" },
+      { type:"feat", text:"ctrl-period 변경 → filterDealsByPeriod → recomputeForPeriod → renderAll() 전체 연동" }
+    ]
+  },
+  {
     version: "2.10.1",
     date: "2026-05-23",
     label: "히트맵 딜 전환율 계산 로직 변경 — 리드 유입 기준",
@@ -1650,6 +1665,52 @@ function svgIcon(name, color = "currentColor", size = 14) {
 const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "–";
 const now = () => new Date().toLocaleString("ko-KR");
 
+// ── 글로벌 기간 필터 헬퍼 ─────────────────────────────────
+// "2026-04"  → { from: 2026-04-01, to: 2026-04-30 }
+// "2026-Q2"  → { from: 2026-04-01, to: 2026-06-30 }
+function getPeriodDateRange(period) {
+  if (!period || period === "all") return null;
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    const [y, m] = period.split("-").map(Number);
+    return { from: new Date(y, m-1, 1), to: new Date(y, m, 0, 23, 59, 59, 999) };
+  }
+  if (/^\d{4}-Q[1-4]$/.test(period)) {
+    const y = +period.slice(0, 4);
+    const q = +period.slice(-1);
+    return { from: new Date(y, (q-1)*3, 1), to: new Date(y, q*3, 0, 23, 59, 59, 999) };
+  }
+  return null;
+}
+
+// 딜이 기간 범위 내 파이프라인 진입 여부 판별 (폴백 체인)
+function dealMatchesPeriod(deal, range) {
+  if (!range) return true;
+  const raw = deal["거래 준비(세일즈 파이프라인)로 진입한 날짜"]
+    || deal["거래일"] || deal["자금집행일"] || deal["자금집행 완료일"]
+    || deal["createdAt"] || deal["created_at"] || deal["생성일"] || null;
+  if (!raw) return false;
+  const t = new Date(raw);
+  return t >= range.from && t <= range.to;
+}
+
+// 상위 period 드롭다운 → 퍼널·구매유형 카드 내부 드롭다운 동기화
+function syncCardDropdownsToPeriod(period) {
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    STATE.funnelPeriodType  = 'monthly'; STATE.funnelPeriodValue  = period;
+    STATE.custPeriodType    = 'monthly'; STATE.custPeriodValue    = period;
+    STATE.cohortPeriodType  = 'monthly'; STATE.cohortPeriodValue  = period;
+  } else if (/^\d{4}-Q[1-4]$/.test(period)) {
+    const y = period.slice(0, 4), q = period.slice(-1);
+    const qv = `${y}Q${q}`;
+    STATE.funnelPeriodType  = 'quarterly'; STATE.funnelPeriodValue  = qv;
+    STATE.custPeriodType    = 'quarterly'; STATE.custPeriodValue    = qv;
+    STATE.cohortPeriodType  = 'quarterly'; STATE.cohortPeriodValue  = qv;
+  }
+  populateFunnelPeriodOptions?.();
+  populateCustPeriodOptions?.();
+  populateCohortPeriodOptions?.();
+}
+
 function toast(msg, ms = 2200) {
   const t = $("toast");
   t.textContent = msg;
@@ -1852,6 +1913,7 @@ const STATE = {
   regressions:     [],
   funnelData:        null,      // null = 미로드
   pipelineMetrics:   null,      // null = 미로드
+  allDeals:          [],         // 전기간 원본 딜 목록 (덮어쓰기 금지 — 기간 필터 기준)
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
   rawLeads:          [],         // 원본 리드 목록 (기간 필터 재계산용)
   rawOrgs:           [],         // 원본 조직 목록 (주간 보고서용)
@@ -4540,7 +4602,17 @@ $("btn-gen-annual")?.addEventListener("click", async () => {
 
 // 컨트롤
 $("ctrl-role").addEventListener("change", e => { STATE.role = e.target.value; renderAll(); });
-$("ctrl-period").addEventListener("change", e => { STATE.period = e.target.value; renderAll(); });
+$("ctrl-period").addEventListener("change", e => {
+  STATE.period = e.target.value;
+  if (!STATE.allDeals.length) { renderAll(); return; }
+  const range    = getPeriodDateRange(STATE.period);
+  const filtered = range
+    ? STATE.allDeals.filter(d => dealMatchesPeriod(d, range))
+    : STATE.allDeals;
+  syncCardDropdownsToPeriod(STATE.period);
+  recomputeForPeriod(filtered, STATE.rawLeads);
+  renderAll();
+});
 $("ctrl-source").addEventListener("change", e => { STATE.source = e.target.value; renderAll(); });
 $("btn-refresh").addEventListener("click", () => { toast("데이터를 갱신합니다."); renderAll(); });
 
@@ -5316,7 +5388,6 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
   const range = getFunnelDateRange(periodType, periodValue);
 
   let newCount = 0, retentionCount = 0, reactivatedCount = 0;
-  const orgSeenInPeriod = new Set();
 
   for (const d of wonDeals) {
     // 기간 필터 적용
@@ -5324,9 +5395,7 @@ function computeCustomerTypeData(allDeals, periodType, periodValue) {
       const t = new Date(d.enteredTs);
       if (t < range.from || t > range.to) continue;
     }
-    // 같은 조직이 기간 내 여러 건이면 첫 건만 카운트
-    if (orgSeenInPeriod.has(d.orgId)) continue;
-    orgSeenInPeriod.add(d.orgId);
+    // 동일 업체 복수 건 각각 집계 (월별 추이와 동일 로직)
 
     if (d.purchaseType === "New") {
       newCount++;
@@ -5872,65 +5941,123 @@ function computeFromDeals(deals, leads = []) {
   const avgCycleP50 = dealWonCycleSec.length
     ? +(percentileOf(dealWonCycleSec, 50) / 86400).toFixed(1) : null;
 
-  // STATE 업데이트
-  STATE.pipelineMetrics = { totalDeals, wonDeals, lostDeals, activeDeals, totalLeads: totalLeads || null, sqlLeads: sqlLeads || null, avgCycleP50 };
-
-  // 원본 딜 저장 (기간 필터 재계산용)
-  STATE.rawDeals = deals;
-
-  // 퍼널 데이터 — 기간 필터 적용 후 계산
-  STATE.funnelData = computeFunnelData(deals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
-
-  // 월별 코호트
+  // 월별 코호트 (전기간 — period 독립)
   STATE.monthlyCohort = Object.entries(monthlyMap)
-    .sort(([a],[b]) => b.localeCompare(a))   // 최근 → 과거
+    .sort(([a],[b]) => b.localeCompare(a))
     .map(([month, v]) => ({ month, ...v }));
 
-  // 자금집행 이력
+  // 자금집행 이력 (전기간)
   STATE.jiphaengHistory = computeJiphaengHistory(deals);
 
-  // 소스별 코호트
-  // 컬럼 재정의:
-  //   input  = 세일즈맵 등록 업체 수 (orgChannelCount, 대분류 기준)
-  //   leads  = 리드 파이프라인 진입 수 (leadsSourceMap)
-  //   deals  = 파이프라인 진입 딜 전체 수 (sourceMap.input → "딜 전환")
-  //   paid   = 자금집행 완료 수 (sourceMap.paid)
+  // 기간 의존 통계 (cohortsBySource, pipelineMetrics, cycles, funnelData)
+  recomputeForPeriod(deals, leads);
+
+  // 전기간 원본 백업 (최초 1회만 저장)
+  if (!STATE.allDeals.length) STATE.allDeals = deals;
+  STATE.rawDeals = deals;
+  STATE.dataLoaded = true;
+}
+
+// ── 기간 의존 통계만 재계산 (period 변경 시 호출) ──────────
+// 월별 코호트·히트맵·trendData 는 allDeals 기반이므로 건드리지 않음
+function recomputeForPeriod(deals, leads = []) {
+  const mapping = loadPipelineMapping();
+  const salesMap = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
+  const leadMap  = Object.fromEntries(mapping.filter(m => m.pipe === "리드" ).map(m => [m.stage, m]));
+
+  const wonStages  = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
+  const lostStages = Object.values(salesMap).filter(m => m.cat === "실패").map(m => m.stage);
+  const sqlStages  = Object.values(leadMap ).filter(m => m.cat === "종료" && m.include).map(m => m.stage);
+
+  const stageCounts = {};
+  const dealWonCycleSec = [];
+  const dealWonCycleSecBySource = {};
+  const sourceMap = {};
+
+  for (const deal of deals) {
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    if (cur) stageCounts[cur] = (stageCounts[cur] || 0) + 1;
+
+    const src = detectDealSource(deal);
+    const purchaseType = parseDealPurchaseType(deal);
+    if (src) {
+      if (!sourceMap[src]) sourceMap[src] = { input:0, deals:0, paid:0, new_:0, repeat:0, leads:0 };
+      sourceMap[src].input++;
+      if (purchaseType === "Repeat") sourceMap[src].repeat++;
+      else sourceMap[src].new_++;
+      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;
+      if (cur && cur === "자금집행 완료")  sourceMap[src].paid++;
+    }
+
+    if (cur && wonStages.includes(cur)) {
+      const dwells = parseStageDwells(deal, "세일즈 파이프라인");
+      const totalSec = Object.values(dwells).reduce((s, d) => s + (d.dwellSec || 0), 0);
+      if (totalSec > 0) {
+        dealWonCycleSec.push(totalSec);
+        if (src) {
+          const srcTop = (src || "").split(" · ")[0].trim();
+          if (!dealWonCycleSecBySource[srcTop]) dealWonCycleSecBySource[srcTop] = [];
+          dealWonCycleSecBySource[srcTop].push(totalSec);
+        }
+      }
+    }
+  }
+
+  // 리드 집계
+  let totalLeads = leads.length;
+  let sqlLeads = 0;
+  const leadsSourceMap = {};
+  for (const lead of leads) {
+    const cur = detectCurrentStage(lead, "리드 파이프라인");
+    if (cur && sqlStages.includes(cur)) sqlLeads++;
+    const lsrc = detectDealSource(lead);
+    if (lsrc) leadsSourceMap[lsrc] = (leadsSourceMap[lsrc] || 0) + 1;
+  }
+  if (!leads.length) {
+    for (const deal of deals) {
+      const cur = detectCurrentStage(deal, "리드 파이프라인");
+      if (cur && leadMap[cur]) { totalLeads++; if (sqlStages.includes(cur)) sqlLeads++; }
+    }
+  }
+
+  const totalDeals  = deals.length;
+  const wonDeals    = wonStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
+  const lostDeals   = lostStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
+  const activeDeals = totalDeals - wonDeals - lostDeals;
+  const avgCycleP50 = dealWonCycleSec.length
+    ? +(percentileOf(dealWonCycleSec, 50) / 86400).toFixed(1) : null;
+
+  STATE.pipelineMetrics = { totalDeals, wonDeals, lostDeals, activeDeals,
+    totalLeads: totalLeads || null, sqlLeads: sqlLeads || null, avgCycleP50 };
+
+  STATE.funnelData = computeFunnelData(deals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
+
   if (Object.keys(sourceMap).length) {
-    const seenTops = new Set(); // 대분류 첫 행에만 org 수 부여 (중복 합산 방지)
+    const seenTops = new Set();
     STATE.cohortsBySource = Object.entries(sourceMap).map(([source, v]) => {
       const top = (source || "").split(" · ")[0].trim();
       const orgInput = !seenTops.has(top) ? (STATE.orgChannelCount[top] || 0) : 0;
       if (!seenTops.has(top)) seenTops.add(top);
-      return {
-        source, label: source,
-        input: orgInput,                          // 유입 = 등록 업체 수
-        leads: leadsSourceMap[source] || 0,       // 리드 전환 = 리드 파이프라인 진입 수
-        deals: v.input,                           // 딜 전환 = 파이프라인 진입 딜 전체
-        paid:  v.paid,                            // 자금집행 완료
-        new_: v.new_,
-        retention: v.repeat,
-        reactivated: 0
-      };
+      return { source, label: source,
+        input: orgInput, leads: leadsSourceMap[source] || 0,
+        deals: v.input, paid: v.paid,
+        new_: v.new_, retention: v.repeat, reactivated: 0 };
     });
   } else {
-    // 소스 필드 없을 때 — "전체" 단일 행으로 집계 표시
     const totalNew    = deals.filter(d => parseDealPurchaseType(d) !== "Repeat").length;
     const totalRepeat = deals.filter(d => parseDealPurchaseType(d) === "Repeat").length;
     const totalOrgInput = Object.values(STATE.orgChannelCount || {}).reduce((a, b) => a + b, 0) || totalDeals;
     STATE.cohortsBySource = [{
       source: "전체", label: "전체 (소스 미분류)",
-      input: totalOrgInput,
-      leads: totalLeads,
-      deals: totalDeals,
+      input: totalOrgInput, leads: totalLeads, deals: totalDeals,
       paid: deals.filter(d => detectCurrentStage(d, "세일즈 파이프라인") === "자금집행 완료").length,
       new_: totalNew, retention: totalRepeat, reactivated: 0
     }];
   }
 
-  // 영업 사이클 (파이프라인 전체 + 소스별)
   if (dealWonCycleSec.length) {
     const toDay = sec => +(sec / 86400).toFixed(1);
-    const SOURCE_ORDER = ["네트워크", "아웃바운드", "오프/행사", "외부채널", "인바운드", "재유입/기타"];
+    const SOURCE_ORDER = ["네트워크","아웃바운드","오프/행사","외부채널","인바운드","재유입/기타"];
     STATE.cycles = [{
       source: "전체",
       p50: toDay(percentileOf(dealWonCycleSec, 50)),
@@ -5939,27 +6066,23 @@ function computeFromDeals(deals, leads = []) {
       max: toDay(Math.max(...dealWonCycleSec)),
       outlier: dealWonCycleSec.filter(s => s / 86400 > 90).length
     }];
-    // 소스별 행 추가 — 정렬 순서: 정의된 6개 우선, 나머지 알파벳
     const srcKeys = [
       ...SOURCE_ORDER.filter(k => dealWonCycleSecBySource[k]),
       ...Object.keys(dealWonCycleSecBySource).filter(k => !SOURCE_ORDER.includes(k)).sort()
     ];
     for (const s of srcKeys) {
       const secArr = dealWonCycleSecBySource[s];
-      if (!secArr || !secArr.length) continue;
-      STATE.cycles.push({
-        source: s,
-        p50: toDay(percentileOf(secArr, 50)),
-        p75: toDay(percentileOf(secArr, 75)),
-        p90: toDay(percentileOf(secArr, 90)),
-        max: toDay(Math.max(...secArr)),
-        outlier: secArr.filter(s => s / 86400 > 90).length
-      });
+      if (!secArr?.length) continue;
+      STATE.cycles.push({ source: s,
+        p50: toDay(percentileOf(secArr, 50)), p75: toDay(percentileOf(secArr, 75)),
+        p90: toDay(percentileOf(secArr, 90)), max: toDay(Math.max(...secArr)),
+        outlier: secArr.filter(s => s / 86400 > 90).length });
     }
+  } else {
+    STATE.cycles = [];
   }
 
   STATE.regressions = detectRegressions(deals, mapping);
-  STATE.dataLoaded = true;
 }
 
 // 실데이터 전체 로딩
