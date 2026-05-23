@@ -358,22 +358,17 @@ tbody tr:hover td{background:var(--primary-50)}
     <!-- ══════ 파이프라인 ══════ -->
     <div class="section" id="view-pipeline">
       <div class="g g3" id="pipeline-cards" style="margin-bottom:16px"></div>
-      <div class="g g2">
-        <div class="card">
-          <div class="card-header">
-            <h3>단계 체류 시간</h3>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span class="pill pill-blue" style="cursor:pointer" onclick="showPctileHelp('ALL')" title="클릭하여 지표 설명 보기">P50 / P75 / P90 (시간) ℹ</span>
-              <button class="btn" id="btn-refresh-velocity" onclick="handleRefreshVelocity()">API 새로고침</button>
-              <span id="velocity-status" style="font-size:11px;color:var(--muted)"></span>
-            </div>
+      <!-- 단계 체류 시간 (전체 너비) -->
+      <div class="card">
+        <div class="card-header">
+          <h3>단계 체류 시간</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pill pill-blue" style="cursor:pointer" onclick="showPctileHelp('ALL')" title="클릭하여 지표 설명 보기">P50 / P75 / P90 (시간) ℹ</span>
+            <button class="btn" id="btn-refresh-velocity" onclick="handleRefreshVelocity()">API 새로고침</button>
+            <span id="velocity-status" style="font-size:11px;color:var(--muted)"></span>
           </div>
-          <div class="card-body np tw"><table><thead><tr><th>파이프라인</th><th>단계</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P50')" title="클릭하여 설명 보기">P50 ℹ</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P75')" title="클릭하여 설명 보기">P75 ℹ</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P90')" title="클릭하여 설명 보기">P90 ℹ</th><th>정체</th><th>위험도</th></tr></thead><tbody id="velocity-rows"></tbody></table></div>
         </div>
-        <div class="card">
-          <div class="card-header"><h3>단계 역행(Regression)</h3><span class="pill pill-orange">비즈니스 리스크</span></div>
-          <div class="card-body np tw"><table><thead><tr><th>회사</th><th>from</th><th>to</th><th>발생일</th><th>횟수</th></tr></thead><tbody id="regression-rows"></tbody></table></div>
-        </div>
+        <div class="card-body np tw"><table><thead><tr><th>파이프라인</th><th>단계</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P50')" title="클릭하여 설명 보기">P50 ℹ</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P75')" title="클릭하여 설명 보기">P75 ℹ</th><th style="cursor:pointer;text-decoration:underline dotted" onclick="showPctileHelp('P90')" title="클릭하여 설명 보기">P90 ℹ</th><th>정체</th><th>위험도</th></tr></thead><tbody id="velocity-rows"></tbody></table></div>
       </div>
       <!-- 체류 시간 히트맵 -->
       <div class="card" style="margin-top:16px">
@@ -386,6 +381,11 @@ tbody tr:hover td{background:var(--primary-50)}
           </div>
         </div>
         <div class="card-body" id="dwell-heatmap-wrap" style="overflow-x:auto"></div>
+      </div>
+      <!-- 단계 역행 (최하단) -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><h3>단계 역행(Regression)</h3><span class="pill pill-orange">비즈니스 리스크</span></div>
+        <div class="card-body np tw"><table><thead><tr><th>회사</th><th>FROM</th><th>TO</th><th>발생일</th><th>횟수</th></tr></thead><tbody id="regression-rows"></tbody></table></div>
       </div>
     </div>
 
