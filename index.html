@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.0</title>
+<title>플로우페이 코호트 대시보드 v2.7.1</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -395,6 +395,16 @@ tbody tr:hover td{background:var(--primary-50)}
 
     <!-- ══════ 데이터 품질 ══════ -->
     <div class="section" id="view-quality">
+      <!-- API 응답 검증 패널 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <h3>세일즈 활동 API 검증</h3>
+          <button class="btn primary" id="btn-validate-apis" style="font-size:12px;height:30px;padding:0 12px">🔍 검증 실행</button>
+        </div>
+        <div id="api-validate-result" style="padding:14px 18px;font-size:12px;color:var(--fg-3)">
+          검증 실행 버튼을 누르면 /v2/memo · /v2/todo · /v2/deal/activity 응답을 확인합니다.
+        </div>
+      </div>
       <div class="g g4" id="quality-kpi" style="margin-bottom:16px"></div>
       <div class="g g2">
         <div class="card">
@@ -760,6 +770,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.7.1",
+    date: "2026-05-23",
+    label: "데이터 품질 — API 응답 검증 패널 추가",
+    items: [
+      { type:"feat", text:"데이터 품질 탭에 'API 검증 실행' 버튼 추가" },
+      { type:"feat", text:"memo·todo·deal/lead activity 4개 엔드포인트 응답 구조 실시간 확인 (유형·날짜·smsId·emailMessageId 필드 유무)" },
+      { type:"feat", text:"첫 번째 항목 JSON 펼쳐보기 — 실제 필드명 직접 확인 가능" }
+    ]
+  },
   {
     version: "2.7.0",
     date: "2026-05-23",
@@ -3691,6 +3711,69 @@ $("btn-reset-sla").addEventListener("click", () => {
   STATE.slaOverride = {};
   renderSLA(); renderFreshness();
   toast("SLA 상태가 초기화되었습니다.");
+});
+
+// ── API 검증 버튼 ──
+$("btn-validate-apis").addEventListener("click", async () => {
+  const el = $("api-validate-result");
+  el.innerHTML = `<span style="color:var(--fg-4)">⏳ API 호출 중…</span>`;
+
+  const ENDPOINTS = [
+    { label: "노트 (memo)",          path: "/v2/memo?limit=3",          listKey: "memoList" },
+    { label: "TODO",                  path: "/v2/todo?limit=3",          listKey: "todoList" },
+    { label: "딜 액티비티",           path: "/v2/deal/activity?limit=3", listKey: "dealActivityList" },
+    { label: "리드 액티비티",         path: "/v2/lead/activity?limit=3", listKey: "leadActivityList" },
+  ];
+
+  const badge = (ok, text) =>
+    `<span style="display:inline-block;padding:1px 8px;border-radius:4px;font-size:11px;font-weight:700;
+      background:${ok?"#dcfce7":"#fee2e2"};color:${ok?"#16a34a":"#dc2626"}">${text}</span>`;
+
+  let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">`;
+
+  for (const ep of ENDPOINTS) {
+    let status = "error", count = 0, sample = null, fields = [];
+    try {
+      const data = await salesmapGet(ep.path);
+      const list = data?.data?.[ep.listKey] || data?.data?.items || data?.items || [];
+      count  = list.length;
+      sample = list[0] || null;
+      fields = sample ? Object.keys(sample) : [];
+      status = count > 0 ? "ok" : "empty";
+    } catch(e) { status = "error"; }
+
+    const hasType   = fields.includes("유형") || fields.includes("type");
+    const hasDate   = fields.some(f => f.includes("date") || f.includes("Date") || f.includes("날짜"));
+    const hasSmsId  = fields.includes("smsId");
+    const hasEmailId= fields.includes("emailMessageId");
+
+    html += `<div style="border:1px solid var(--line-1);border-radius:8px;padding:12px 14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-weight:700;font-size:13px">${ep.label}</span>
+        ${badge(status==="ok", status==="ok"?"✅ 정상":status==="empty"?"⚠️ 빈 응답":"❌ 오류")}
+      </div>
+      <div style="font-size:11px;color:var(--fg-4);margin-bottom:6px">
+        <code style="background:var(--bg-2);padding:1px 6px;border-radius:3px">${ep.path.split("?")[0]}</code>
+        &nbsp;→ <b>${count}건</b> 반환
+      </div>
+      ${sample ? `
+        <div style="font-size:11px;margin-bottom:4px">
+          ${badge(hasType,   hasType   ? "✅ 유형 필드 있음" : "⚠️ 유형 필드 없음")}
+          ${badge(hasDate,   hasDate   ? "✅ 날짜 필드 있음" : "⚠️ 날짜 필드 없음")}
+          ${hasSmsId   ? badge(true, "✅ smsId") : ""}
+          ${hasEmailId ? badge(true, "✅ emailMessageId") : ""}
+        </div>
+        <details style="margin-top:6px">
+          <summary style="font-size:11px;color:var(--primary-500);cursor:pointer">첫 번째 항목 보기</summary>
+          <pre style="font-size:10px;background:var(--bg-2);padding:8px;border-radius:4px;overflow:auto;max-height:160px;margin-top:4px">${JSON.stringify(sample, null, 2)}</pre>
+        </details>
+      ` : `<div style="font-size:11px;color:var(--fg-4);font-style:italic">응답 데이터 없음</div>`}
+    </div>`;
+  }
+
+  html += `</div>`;
+  el.innerHTML = html;
+  toast("API 검증 완료");
 });
 
 // 이벤트 원장 필터
