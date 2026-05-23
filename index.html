@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.6</title>
+<title>플로우페이 코호트 대시보드 v2.8.7</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -110,7 +110,8 @@ select.ctrl:focus,input.ctrl:focus{outline:none;border-color:var(--primary-400)}
 /* ── 카드 ── */
 .card{background:var(--bg-1);border:1px solid var(--line-1);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-xs)}
 .card-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line-1)}
-.card-header h3{font-size:14px;font-weight:700;margin:0;color:var(--fg-1);letter-spacing:-.01em}
+.card-header h3{font-size:14px;font-weight:700;margin:0;color:var(--fg-1);letter-spacing:-.01em;display:inline-flex;align-items:center;gap:4px}
+.info-btn{background:none;border:none;cursor:pointer;color:var(--fg-4);font-size:13px;font-weight:400;padding:0;line-height:1;transition:color .15s;flex-shrink:0;opacity:.7}.info-btn:hover{color:var(--primary-400);opacity:1}
 .card-body{padding:16px 18px}
 .card-body.np{padding:0}
 
@@ -282,7 +283,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <!-- 코호트 전환 현황 — 전체 너비 -->
       <div class="card">
         <div class="card-header">
-          <h3>코호트 전환 현황</h3>
+          <h3>코호트 전환 현황 <button class="info-btn" onclick="showInfoModal('cohort_overview')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;gap:6px;align-items:center">
             <select id="cohort-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
               <option value="all">전체</option>
@@ -299,7 +300,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="g g2" style="margin-top:16px">
         <div class="card">
           <div class="card-header">
-            <h3>딜 퍼널</h3>
+            <h3>딜 퍼널 <button class="info-btn" onclick="showInfoModal('deal_funnel')" title="항목 설명">ⓘ</button></h3>
             <div style="display:flex;gap:6px;align-items:center">
               <select id="funnel-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
                 <option value="weekly">주간</option>
@@ -314,7 +315,7 @@ tbody tr:hover td{background:var(--primary-50)}
         </div>
         <div class="card">
           <div class="card-header">
-            <h3>구매 유형 분포</h3>
+            <h3>구매 유형 분포 <button class="info-btn" onclick="showInfoModal('purchase_type')" title="항목 설명">ⓘ</button></h3>
             <div style="display:flex;gap:6px;align-items:center">
               <select id="cust-period-type" class="ctrl" style="font-size:12px;padding:2px 6px;height:26px">
                 <option value="weekly">주간</option>
@@ -333,22 +334,22 @@ tbody tr:hover td{background:var(--primary-50)}
     <!-- ══════ 코호트 분석 ══════ -->
     <div class="section" id="view-cohort">
       <div class="card" style="margin-bottom:16px">
-        <div class="card-header"><h3>월별 × 유입경로 코호트 히트맵</h3><span class="pill pill-gray">딜 전환율 기준</span></div>
+        <div class="card-header"><h3>월별 × 유입경로 코호트 히트맵 <button class="info-btn" onclick="showInfoModal('heatmap')" title="항목 설명">ⓘ</button></h3><span class="pill pill-gray">딜 전환율 기준</span></div>
         <div class="card-body" id="heatmap-wrap" style="overflow-x:auto"></div>
       </div>
       <div class="g g2">
         <div class="card">
-          <div class="card-header"><h3>코호트별 영업 사이클 (일)</h3><span class="pill pill-blue">성사 딜 기준</span></div>
+          <div class="card-header"><h3>코호트별 영업 사이클 (일) <button class="info-btn" onclick="showInfoModal('cycle')" title="항목 설명">ⓘ</button></h3><span class="pill pill-blue">성사 딜 기준</span></div>
           <div class="card-body np tw"><table><thead><tr><th>유입 경로</th><th>P50</th><th>P75</th><th>P90</th><th>최대</th><th>이상치</th></tr></thead><tbody id="cycle-rows"></tbody></table></div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>재활성화/리텐션 추이</h3></div>
+          <div class="card-header"><h3>재활성화/리텐션 추이 <button class="info-btn" onclick="showInfoModal('retention')" title="항목 설명">ⓘ</button></h3></div>
           <div class="card-body" id="retention-chart"></div>
         </div>
       </div>
       <div class="card" style="margin-top:16px">
         <div class="card-header">
-          <h3>월별 구매 유형 추이</h3>
+          <h3>월별 구매 유형 추이 <button class="info-btn" onclick="showInfoModal('purchase_trend')" title="항목 설명">ⓘ</button></h3>
           <span class="pill pill-blue">최근 12개월 · 세그먼트 클릭 시 업체 확인</span>
         </div>
         <div class="card-body" id="purchase-type-trend-chart" style="padding:16px"></div>
@@ -361,7 +362,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <!-- 단계 체류 시간 (전체 너비) -->
       <div class="card">
         <div class="card-header">
-          <h3>단계 체류 시간</h3>
+          <h3>단계 체류 시간 <button class="info-btn" onclick="showInfoModal('velocity')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="pill pill-blue" style="cursor:pointer" onclick="showPctileHelp('ALL')" title="클릭하여 지표 설명 보기">P50 / P75 / P90 (시간) ℹ</span>
             <button class="btn" id="btn-refresh-velocity" onclick="handleRefreshVelocity()">API 새로고침</button>
@@ -373,7 +374,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <!-- 체류 시간 히트맵 -->
       <div class="card" style="margin-top:16px">
         <div class="card-header">
-          <h3>단계별 체류 시간 트렌드</h3>
+          <h3>단계별 체류 시간 트렌드 <button class="info-btn" onclick="showInfoModal('dwell_trend')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;align-items:center;gap:8px">
             <span class="pill pill-gray">P50 (시간) × 월별</span>
             <button class="btn" id="btn-refresh-dwell-heatmap">API 새로고침</button>
@@ -384,7 +385,7 @@ tbody tr:hover td{background:var(--primary-50)}
       </div>
       <!-- 단계 역행 (최하단) -->
       <div class="card" style="margin-top:16px">
-        <div class="card-header"><h3>단계 역행(Regression)</h3><span class="pill pill-orange">비즈니스 리스크</span></div>
+        <div class="card-header"><h3>단계 역행(Regression) <button class="info-btn" onclick="showInfoModal('regression')" title="항목 설명">ⓘ</button></h3><span class="pill pill-orange">비즈니스 리스크</span></div>
         <div class="card-body np tw"><table><thead><tr><th>회사</th><th>FROM</th><th>TO</th><th>발생일</th><th>횟수</th></tr></thead><tbody id="regression-rows"></tbody></table></div>
       </div>
     </div>
@@ -394,7 +395,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <!-- API 응답 검증 패널 -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
-          <h3>세일즈 활동 API 검증</h3>
+          <h3>세일즈 활동 API 검증 <button class="info-btn" onclick="showInfoModal('api_validate')" title="항목 설명">ⓘ</button></h3>
           <button class="btn primary" id="btn-validate-apis" style="font-size:12px;height:30px;padding:0 12px">🔍 검증 실행</button>
         </div>
         <div id="api-validate-result" style="padding:14px 18px;font-size:12px;color:var(--fg-3)">
@@ -404,21 +405,21 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="g g4" id="quality-kpi" style="margin-bottom:16px"></div>
       <div class="g g2">
         <div class="card">
-          <div class="card-header"><h3>스테이징 이벤트 검토 대기</h3><span class="pill pill-orange pill-dot" id="staging-count-badge">0건</span></div>
+          <div class="card-header"><h3>스테이징 이벤트 검토 대기 <button class="info-btn" onclick="showInfoModal('staging')" title="항목 설명">ⓘ</button></h3><span class="pill pill-orange pill-dot" id="staging-count-badge">0건</span></div>
           <div class="card-body" id="staging-list"></div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>필수 플래그 현황</h3><span class="pill pill-gray">캠페인 제외 영향</span></div>
+          <div class="card-header"><h3>필수 플래그 현황 <button class="info-btn" onclick="showInfoModal('flags')" title="항목 설명">ⓘ</button></h3><span class="pill pill-gray">캠페인 제외 영향</span></div>
           <div class="card-body" id="flags-list"></div>
         </div>
       </div>
       <div class="g g2" style="margin-top:16px">
         <div class="card">
-          <div class="card-header"><h3>보고서 데이터 신선도</h3><span class="pill pill-green pill-dot" id="freshness-pill">validated</span></div>
+          <div class="card-header"><h3>보고서 데이터 신선도 <button class="info-btn" onclick="showInfoModal('freshness')" title="항목 설명">ⓘ</button></h3><span class="pill pill-green pill-dot" id="freshness-pill">validated</span></div>
           <div class="card-body np" id="freshness-list"></div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>소스 품질 점수 분포</h3><span class="pill pill-gray">100점 기준</span></div>
+          <div class="card-header"><h3>소스 품질 점수 분포 <button class="info-btn" onclick="showInfoModal('quality_score')" title="항목 설명">ⓘ</button></h3><span class="pill pill-gray">100점 기준</span></div>
           <div class="card-body" id="quality-chart"></div>
         </div>
       </div>
@@ -427,7 +428,7 @@ tbody tr:hover td{background:var(--primary-50)}
     <!-- ══════ 보고서 & 알림 ══════ -->
     <div class="section" id="view-sla">
       <div class="card" style="margin-bottom:16px">
-        <div class="card-header"><h3>정기 보고서 SLA 현황</h3>
+        <div class="card-header"><h3>정기 보고서 SLA 현황 <button class="info-btn" onclick="showInfoModal('sla')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;gap:6px">
             <button class="btn" id="btn-sim-delay">지연 시뮬레이션</button>
             <button class="btn" id="btn-sim-fail">실패 시뮬레이션</button>
@@ -438,7 +439,7 @@ tbody tr:hover td{background:var(--primary-50)}
       </div>
       <div class="g g2">
         <div class="card">
-          <div class="card-header"><h3>Slack 통보 메시지</h3><span class="pill pill-blue">@예충희</span></div>
+          <div class="card-header"><h3>Slack 통보 메시지 <button class="info-btn" onclick="showInfoModal('slack_msg')" title="항목 설명">ⓘ</button></h3><span class="pill pill-blue">@예충희</span></div>
           <div class="card-body">
             <div class="slack-preview" id="slack-preview"></div>
             <div style="display:flex;gap:8px;margin-top:12px">
@@ -457,7 +458,7 @@ tbody tr:hover td{background:var(--primary-50)}
           </div>
         </div>
         <div class="card">
-          <div class="card-header"><h3>통보 이력</h3><button class="btn" id="btn-clear-history" style="font-size:12px;height:28px;padding:0 10px">초기화</button></div>
+          <div class="card-header"><h3>통보 이력 <button class="info-btn" onclick="showInfoModal('notify_history')" title="항목 설명">ⓘ</button></h3><button class="btn" id="btn-clear-history" style="font-size:12px;height:28px;padding:0 10px">초기화</button></div>
           <div class="card-body" id="notify-history"></div>
         </div>
       </div>
@@ -467,7 +468,7 @@ tbody tr:hover td{background:var(--primary-50)}
     <div class="section" id="view-ledger">
       <div class="card">
         <div class="card-header">
-          <h3>코호트 이벤트 원장</h3>
+          <h3>코호트 이벤트 원장 <button class="info-btn" onclick="showInfoModal('ledger')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;gap:8px;align-items:center">
             <select class="ctrl" id="ledger-filter" style="height:30px;font-size:12px">
               <option value="all">전체</option>
@@ -724,7 +725,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <!-- 코호트 섹션 -->
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
-          <h3>유입 채널별 코호트</h3>
+          <h3>유입 채널별 코호트 <button class="info-btn" onclick="showInfoModal('weekly_cohort')" title="항목 설명">ⓘ</button></h3>
           <span class="pill pill-gray" id="weekly-cohort-pill">이번 주 기준</span>
         </div>
         <div class="card-body np tw">
@@ -735,7 +736,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <!-- 세일즈 활동 섹션 -->
       <div class="card">
         <div class="card-header">
-          <h3>세일즈 활동</h3>
+          <h3>세일즈 활동 <button class="info-btn" onclick="showInfoModal('weekly_activity')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;align-items:center;gap:6px">
             <button id="btn-weekly-prev" class="nav-week-btn" onclick="weeklyNavShift(-1)" title="전주">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -788,6 +789,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.7",
+    date: "2026-05-23",
+    label: "전체 카드 제목 ⓘ 팝업 — 항목별 데이터 의미 안내",
+    items: [
+      { type:"feat", text:"showInfoModal(key): 글로벌 ⓘ 정보 모달 — backdrop 클릭 or 닫기 버튼으로 닫힘" },
+      { type:"feat", text:"INFO_CONTENT: 20개 카드 설명 텍스트 (대시보드·코호트·파이프라인·품질·SLA·원장·주간)" },
+      { type:"feat", text:"모든 카드 h3 제목에 ⓘ 버튼 추가 (히트맵 0.0% 원인 안내 포함)" }
+    ]
+  },
   {
     version: "2.8.6",
     date: "2026-05-23",
@@ -2655,6 +2666,177 @@ function fmtDwell(h) {
   if (days === 0) return `${hrs}시간`;
   if (hrs  === 0) return `${days}일`;
   return `${days}일 ${hrs}시간`;
+}
+
+// ══════════════════════════════════════════════
+//  글로벌 ⓘ 정보 모달
+// ══════════════════════════════════════════════
+const INFO_CONTENT = {
+  cohort_overview: {
+    title: "코호트 전환 현황",
+    body: `유입 경로별로 각 전환 단계의 건수와 딜 전환율을 보여줍니다.<br><br>
+      <b>유입</b>: 해당 경로로 처음 등록된 조직·리드 수<br>
+      <b>리드 전환</b>: 리드 파이프라인으로 진입한 수<br>
+      <b>딜 전환</b>: 딜 파이프라인으로 진입한 수<br>
+      <b>자금집행 완료</b>: 최종 성사(결제 완료) 수<br>
+      <b>딜 전환율</b>: 유입 대비 딜 파이프라인 진입 비율`
+  },
+  deal_funnel: {
+    title: "딜 퍼널",
+    body: `선택한 기간 내 딜 파이프라인 각 단계의 현재 체류 건수를 시각화한 퍼널입니다.<br><br>
+      위에서 아래로 갈수록 성사에 가까운 단계이며, 각 단계 사이의 이탈·전환율을 파악할 수 있습니다.`
+  },
+  purchase_type: {
+    title: "구매 유형 분포",
+    body: `선택 기간 내 성사된 딜을 구매 유형별로 분류한 분포입니다.<br><br>
+      <b>신규</b>: 처음 가입한 고객<br>
+      <b>리텐션</b>: 기존 고객의 재약정·갱신<br>
+      <b>재활성화</b>: 이탈 후 재가입한 고객<br>
+      <b>미분류</b>: 유형 정보가 없는 건`
+  },
+  heatmap: {
+    title: "월별 × 유입경로 코호트 히트맵",
+    body: `월별·유입경로별 <b>딜 전환율(%)</b>을 히트맵으로 시각화합니다.<br><br>
+      <b>딜 전환율</b> = 해당 월에 해당 경로로 유입된 건 중 딜 파이프라인까지 진입한 비율<br><br>
+      색상이 진할수록 전환율이 높습니다.<br><br>
+      <b>0.0%로 표시되는 경우</b><br>
+      해당 월에 전환된 딜이 없거나, SalesMap의 유입 경로 필드가 미연동된 경우입니다. 연동 설정에서 소스 필드명을 확인해 주세요.`
+  },
+  cycle: {
+    title: "코호트별 영업 사이클 (일)",
+    body: `유입 경로별로 성사된 딜의 영업 기간(일)을 퍼센타일로 분석합니다.<br><br>
+      <b>P50</b>: 절반의 딜이 이 일수 이내에 성사<br>
+      <b>P75</b>: 75%의 딜이 이 일수 이내에 성사<br>
+      <b>P90</b>: 90%의 딜이 이 일수 이내에 성사<br>
+      <b>이상치</b>: P90을 크게 초과하는 딜 수`
+  },
+  retention: {
+    title: "재활성화/리텐션 추이",
+    body: `월별 재구매(리텐션 + 재활성화) 건수 추이를 보여줍니다.<br><br>
+      <b>리텐션</b>: 기존 고객이 재약정·갱신한 건<br>
+      <b>재활성화</b>: 이탈 후 재가입한 건<br>
+      <b>예측(06*)</b>: 현재까지 데이터 기반 예상 수치 — P50 재구매 주기 적용`
+  },
+  purchase_trend: {
+    title: "월별 구매 유형 추이",
+    body: `최근 12개월 동안 신규·리텐션·재활성화·미분류 구매 유형이 월별로 어떻게 변화했는지 보여줍니다.<br><br>
+      막대 세그먼트를 클릭하면 해당 월·유형의 업체 목록을 확인할 수 있습니다.`
+  },
+  velocity: {
+    title: "단계 체류 시간",
+    body: `딜이 각 파이프라인 단계에 머문 시간(시간 단위)을 통계적으로 분석합니다.<br><br>
+      <b>P50</b>: 절반의 딜이 해당 단계를 이 시간 이내에 통과<br>
+      <b>P75</b>: 75%가 이 시간 이내에 통과<br>
+      <b>P90</b>: 90%가 이 시간 이내에 통과<br>
+      <b>정체</b>: 현재 해당 단계에 비정상적으로 오래 머문 딜 수<br>
+      <b>위험도</b>: 정체 비율 기반 위험 수준 (낮음 / 보통 / 높음)`
+  },
+  dwell_trend: {
+    title: "단계별 체류 시간 트렌드",
+    body: `각 파이프라인 단계의 P50 체류 시간이 월별로 어떻게 변화했는지 보여줍니다.<br><br>
+      특정 단계의 체류 시간이 증가 추세라면 해당 단계에 병목이 생기고 있음을 의미합니다.`
+  },
+  regression: {
+    title: "단계 역행(Regression)",
+    body: `딜이 앞 단계로 되돌아간 이력을 추적합니다.<br><br>
+      단계 역행은 심사 탈락, 서류 재제출 요청 등 영업 리스크의 신호일 수 있습니다.<br><br>
+      <b>FROM → TO</b>: 역행이 발생한 단계 경로<br>
+      <b>횟수</b>: 해당 딜에서 동일 역행이 반복된 횟수`
+  },
+  api_validate: {
+    title: "세일즈 활동 API 검증",
+    body: `SalesMap API 엔드포인트의 응답 상태를 실시간으로 검증합니다.<br><br>
+      <b>검증 대상</b>: /v2/memo · /v2/todo · /v2/deal/activity · /v2/lead/activity<br><br>
+      검증 실행 시 각 API의 응답 건수와 최신 항목 날짜를 확인할 수 있습니다.`
+  },
+  staging: {
+    title: "스테이징 이벤트 검토 대기",
+    body: `자동 집계되었으나 아직 확정(validated)되지 않은 이벤트 목록입니다.<br><br>
+      담당자가 각 이벤트를 검토 후 <b>승인</b> 또는 <b>제외</b> 처리해야 확정 데이터에 반영됩니다.`
+  },
+  flags: {
+    title: "필수 플래그 현황",
+    body: `캠페인 제외, 테스트 계정 등 데이터 정합성에 영향을 주는 플래그 현황입니다.<br><br>
+      플래그가 설정된 딜·리드는 코호트 집계에서 제외되거나 별도 처리됩니다.`
+  },
+  freshness: {
+    title: "보고서 데이터 신선도",
+    body: `각 정기 보고서의 데이터 최신성 상태를 보여줍니다.<br><br>
+      <b>validated</b>: 정상적으로 최신 데이터 반영<br>
+      <b>delayed</b>: 예상 시간보다 늦게 업데이트됨<br>
+      <b>failed</b>: 데이터 업데이트 실패<br>
+      <b>scheduled</b>: 아직 집계 일정에 도달하지 않음`
+  },
+  quality_score: {
+    title: "소스 품질 점수 분포",
+    body: `각 유입 소스별 데이터 품질 점수(100점 기준) 분포를 보여줍니다.<br><br>
+      <b>100점</b>: 모든 필수 필드 입력, 이중 확인 완료<br>
+      <b>70~99점</b>: 일부 필드 누락 또는 검증 필요<br>
+      <b>70점 미만</b>: 주요 필드 누락 또는 오류 의심<br><br>
+      점수가 낮은 소스는 코호트 분석 결과의 신뢰도에 영향을 줄 수 있습니다.`
+  },
+  sla: {
+    title: "정기 보고서 SLA 현황",
+    body: `각 정기 보고서의 SLA(Service Level Agreement) 이행 현황입니다.<br><br>
+      <b>마감(Cutoff)</b>: 데이터 수집 마감 시각<br>
+      <b>발행(Publish)</b>: 보고서 배포 예정 시각<br>
+      <b>상태</b>: validated / delayed / failed / scheduled<br><br>
+      지연·실패 발생 시 Slack을 통해 자동 통보됩니다.`
+  },
+  slack_msg: {
+    title: "Slack 통보 메시지",
+    body: `SLA 상태 변경 또는 주간 보고서 발행 시 Slack 채널로 전송되는 메시지를 미리 보기하고 수동 전송할 수 있습니다.<br><br>
+      <b>메시지 복사</b>: 클립보드에 복사<br>
+      <b>Slack 전송</b>: 설정된 Webhook으로 즉시 전송<br>
+      <b>통보 완료 기록</b>: 이력에 수동 기록`
+  },
+  notify_history: {
+    title: "통보 이력",
+    body: `Slack 통보가 발송된 이력입니다.<br><br>수동 전송 및 자동 트리거 발송 내역이 모두 기록됩니다.`
+  },
+  ledger: {
+    title: "코호트 이벤트 원장",
+    body: `코호트 데이터에 기록된 모든 이벤트의 원장(Ledger)입니다.<br><br>
+      각 이벤트는 SHA-256 fingerprint로 무결성이 보장됩니다.<br><br>
+      <b>validated</b>: 확정된 이벤트<br>
+      <b>staging</b>: 검토 대기 중인 이벤트`
+  },
+  weekly_cohort: {
+    title: "유입 채널별 코호트 (주간)",
+    body: `이번 주 기준 유입 채널별 코호트 전환 현황입니다.<br><br>
+      <b>주간 기준</b>: 전주 금요일 16:00:01 ~ 당주 금요일 16:00:00 (KST)<br><br>
+      각 채널의 이번 주 유입·전환 흐름을 빠르게 파악하는 데 사용합니다.`
+  },
+  weekly_activity: {
+    title: "세일즈 활동 (주간)",
+    body: `선택한 주간 기간 동안 팀의 세일즈 활동을 집계합니다.<br><br>
+      <b>DB 생성</b>: 신규 조직·리드 등록 수<br>
+      <b>전화 상담</b>: 전화 상담 노트 건수<br>
+      <b>심사 결과</b>: 심사 결과 노트 건수<br>
+      <b>할 일</b>: 완료·진행 중 태스크 수<br>
+      <b>활동</b>: SMS·이메일·기타 활동 수<br>
+      <b>노트</b>: 기타 노트 건수<br><br>
+      ← 전주 / 다음주 → 버튼으로 이전 주 데이터를 조회할 수 있습니다.`
+  }
+};
+
+function showInfoModal(key) {
+  const info = INFO_CONTENT[key];
+  if (!info) return;
+  const prev = document.getElementById("info-modal-overlay");
+  if (prev) prev.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "info-modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:9100;display:flex;align-items:center;justify-content:center;padding:20px";
+  overlay.innerHTML = `
+    <div style="background:var(--bg-1);border:1px solid var(--line-1);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);padding:28px 30px;max-width:480px;width:100%;position:relative">
+      <div style="font-size:15px;font-weight:700;color:var(--fg-1);margin-bottom:14px;line-height:1.4">${info.title}</div>
+      <div style="font-size:13px;line-height:1.8;color:var(--fg-3)">${info.body}</div>
+      <button onclick="document.getElementById('info-modal-overlay').remove()"
+        style="margin-top:22px;padding:8px 0;border-radius:8px;border:none;background:var(--primary-500,#2d54d6);color:#fff;font-size:13px;font-weight:600;cursor:pointer;display:block;width:100%">닫기</button>
+    </div>`;
+  overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
 }
 
 // P50/P75/P90 설명 팝업
