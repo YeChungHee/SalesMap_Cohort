@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.2</title>
+<title>플로우페이 코호트 대시보드 v2.7.5</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -600,9 +600,15 @@ tbody tr:hover td{background:var(--primary-50)}
             <div class="connection-row">
               <div><div class="conn-label">OCR Pro 매핑 버전 해시</div><input id="inp-mapping-hash" style="border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:13px;width:200px;margin-top:4px" placeholder="Phase 1 조사 중" readonly></div>
             </div>
-            <div style="margin-top:14px">
+            <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
               <button class="btn primary" id="btn-save-settings">설정 저장</button>
+              <button class="btn" id="btn-export-settings" title="모든 API 키·설정을 JSON 파일로 내보내기">⬇ 설정 내보내기</button>
+              <label class="btn" id="lbl-import-settings" title="다른 기기에서 내보낸 JSON 파일 가져오기" style="cursor:pointer;margin:0">
+                ⬆ 설정 가져오기
+                <input type="file" id="inp-import-settings" accept=".json" style="display:none">
+              </label>
             </div>
+            <div id="import-result" style="margin-top:8px;font-size:12px;color:var(--success);display:none"></div>
           </div>
         </div>
       </div>
@@ -3842,6 +3848,66 @@ $("btn-save-settings").addEventListener("click", () => {
   localStorage.setItem("cohort_slack_webhook", $("inp-slack-webhook")?.value.trim() || "");
   toast("설정이 저장되었습니다.");
   renderAll();
+});
+
+// ── 설정 내보내기 ──────────────────────────────
+const SETTINGS_EXPORT_KEYS = [
+  "cohortSettings", "cohort_slack_webhook",
+  "cohort_salesmap_token", "cohort_worker_url",
+  "pipeline_stage_mapping",
+  "ocr_worker_url", "ocr_salesmap_token",
+  "ocr_bizno_key", "ocr_nts_key",
+  "ocr_gemini_key", "ocr_vision_key", "ocr_gcloud_key",
+  "ocr_mapping_hash"
+];
+
+$("btn-export-settings")?.addEventListener("click", () => {
+  const payload = { _version: 1, _exported: new Date().toISOString(), keys: {} };
+  SETTINGS_EXPORT_KEYS.forEach(k => {
+    const v = localStorage.getItem(k);
+    if (v !== null) payload.keys[k] = v;
+  });
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `flowpay-settings-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("설정을 내보냈습니다.");
+});
+
+// ── 설정 가져오기 ──────────────────────────────
+$("inp-import-settings")?.addEventListener("change", e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const payload = JSON.parse(ev.target.result);
+      if (!payload?.keys) throw new Error("올바른 설정 파일이 아닙니다.");
+      let count = 0;
+      Object.entries(payload.keys).forEach(([k, v]) => {
+        if (SETTINGS_EXPORT_KEYS.includes(k)) {
+          localStorage.setItem(k, v);
+          count++;
+        }
+      });
+      // STATE.settings 즉시 갱신
+      STATE.settings = JSON.parse(localStorage.getItem("cohortSettings") || "{}");
+      const res = $("import-result");
+      if (res) {
+        res.textContent = `✓ ${count}개 설정 가져오기 완료 (${payload._exported?.slice(0,10) || "?"} 내보낸 파일)`;
+        res.style.display = "block";
+        setTimeout(() => { res.style.display = "none"; }, 4000);
+      }
+      toast("설정을 가져왔습니다. 페이지를 새로고침합니다.");
+      setTimeout(() => location.reload(), 1200);
+    } catch(err) {
+      toast("가져오기 실패: " + err.message);
+    }
+    e.target.value = ""; // 같은 파일 재선택 허용
+  };
+  reader.readAsText(file);
 });
 
 // 세일즈맵 토큰 직접 저장
