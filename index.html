@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.1</title>
+<title>플로우페이 코호트 대시보드 v2.7.2</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -3228,9 +3228,21 @@ function computeWeeklyActivity(activities, notes, tasks) {
     return t >= start && t <= end;
   });
 
-  // 날짜 범위 필터 헬퍼
+  // 날짜 범위 필터 헬퍼 (노트·액티비티용 — 생성일 기준)
   const inRange = (item) => {
-    const at = item.createdAt || item["created_at"] || item["date"] || item["생성 날짜"] || item["시작 날짜"] || null;
+    const at = item.createdAt || item["created_at"] || item["date"]
+             || item["생성 날짜"] || item["생성일"] || null;
+    if (!at) return false;
+    const t = new Date(at);
+    return t >= start && t <= end;
+  };
+
+  // TODO 전용 날짜 필터 헬퍼 (시작일 기준, SalesMap camelCase 포함)
+  const inRangeTodo = (item) => {
+    const at = item.startDate || item.startAt || item.dueDate
+             || item.endDate  || item.endAt
+             || item["시작일"] || item["시작 날짜"] || item["종료일"]
+             || item.createdAt || item["created_at"] || null;
     if (!at) return false;
     const t = new Date(at);
     return t >= start && t <= end;
@@ -3264,8 +3276,12 @@ function computeWeeklyActivity(activities, notes, tasks) {
   // ── TODO 집계 ──
   let todo = null;
   if (tasks !== null) {
-    const periodTodos = tasks.filter(inRange);
-    const done    = periodTodos.filter(t => t["완료"] === true || t.completed === true).length;
+    const periodTodos = tasks.filter(inRangeTodo);
+    const done    = periodTodos.filter(t =>
+      t["완료"] === true  || t.completed === true
+      || t["완료"] === "완료" || t.status === "완료"
+      || t["완료"] === "done"  || t.status === "done"
+    ).length;
     const pending = periodTodos.length - done;
     const meeting = periodTodos.filter(t => {
       const type = t["유형"] || t.type || "";
@@ -3578,7 +3594,9 @@ document.querySelectorAll(".nav-btn[data-view]").forEach(btn => {
 // 주간 보고서 새로고침 버튼
 $("btn-weekly-refresh")?.addEventListener("click", () => { renderWeeklyReport(); });
 
-$("btn-weekly-save")?.addEventListener("click", () => {
+$("btn-weekly-save")?.addEventListener("click", async () => {
+  // 액티비티 데이터가 아직 로드 안 됐으면 먼저 await
+  if (!STATE.weeklyActivity) await renderWeeklyReport();
   const cohortData = computeWeeklyCohort();
   const actData = STATE.weeklyActivity;
   const range = cohortData?.range || getWeeklyReportRange();
@@ -3596,7 +3614,9 @@ $("btn-weekly-save")?.addEventListener("click", () => {
   toast("보고서가 저장되었습니다.");
 });
 
-$("btn-weekly-md")?.addEventListener("click", () => {
+$("btn-weekly-md")?.addEventListener("click", async () => {
+  // 액티비티 데이터가 아직 로드 안 됐으면 먼저 await
+  if (!STATE.weeklyActivity) await renderWeeklyReport();
   const cohortData = computeWeeklyCohort();
   const actData = STATE.weeklyActivity;
   const md = generateWeeklyMd(cohortData, actData);
