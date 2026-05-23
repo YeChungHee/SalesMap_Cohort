@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.5</title>
+<title>플로우페이 코호트 대시보드 v2.7.6</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -775,6 +775,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.7.6",
+    date: "2026-05-23",
+    label: "세일즈 활동 집계 수정 — 노트 유형 배열 처리 + TODO 날짜 필드 우선순위",
+    items: [
+      { type:"fix", text:"노트 유형 필드 배열 처리: SalesMap '복수 선택' 타입 → Array.isArray로 정규화, getTypes() 헬퍼 도입" },
+      { type:"fix", text:"inRangeTodo: 시작일·생성 날짜·종료일·완료일 (한글 필드명) 우선 체크 후 camelCase fallback" },
+      { type:"fix", text:"노트 텍스트 필드 추가: n['텍스트'] fallback (SalesMap 노트 본문 필드명)" }
+    ]
+  },
   {
     version: "2.7.5",
     date: "2026-05-23",
@@ -3265,10 +3275,10 @@ function computeWeeklyActivity(activities, notes, tasks) {
 
   // TODO 전용 날짜 필터 헬퍼 (시작일 기준, SalesMap camelCase 포함)
   const inRangeTodo = (item) => {
-    const at = item.startDate || item.startAt || item.dueDate
+    const at = item["시작일"] || item["생성 날짜"] || item["종료일"] || item["완료일"]
+             || item.startDate || item.startAt || item.dueDate
              || item.endDate  || item.endAt
-             || item["시작일"] || item["시작 날짜"] || item["종료일"]
-             || item.createdAt || item["created_at"] || null;
+             || item["시작 날짜"] || item.createdAt || item["created_at"] || null;
     if (!at) return false;
     const t = new Date(at);
     return t >= start && t <= end;
@@ -3282,17 +3292,20 @@ function computeWeeklyActivity(activities, notes, tasks) {
     noteTotal = periodNotes.length;
     const CONSULT_TYPES = ["전화 상담", "고객 미팅"];
     const REVIEW_TYPES  = ["심사 결과"];
+    // 유형 필드: 단일 문자열 또는 배열(복수 선택) 모두 처리
+    const getTypes = n => {
+      const raw = n["유형"] || n.type;
+      if (!raw) return [];
+      return Array.isArray(raw) ? raw : [raw];
+    };
     consult = periodNotes.filter(n => {
-      const type = n["유형"] || n.type || "";
-      if (CONSULT_TYPES.includes(type)) return true;
-      // fallback: text 키워드
-      const txt = (n.text || n.content || n["내용"] || "").toLowerCase();
+      if (getTypes(n).some(t => CONSULT_TYPES.includes(t))) return true;
+      const txt = (n.text || n.content || n["내용"] || n["텍스트"] || "").toLowerCase();
       return txt.includes("상담") || txt.includes("미팅");
     }).length;
     review = periodNotes.filter(n => {
-      const type = n["유형"] || n.type || "";
-      if (REVIEW_TYPES.includes(type)) return true;
-      const txt = (n.text || n.content || n["내용"] || "").toLowerCase();
+      if (getTypes(n).some(t => REVIEW_TYPES.includes(t))) return true;
+      const txt = (n.text || n.content || n["내용"] || n["텍스트"] || "").toLowerCase();
       return txt.includes("심사");
     }).length;
     noteEtc = noteTotal - consult - review;
