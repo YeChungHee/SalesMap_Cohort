@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.6</title>
+<title>플로우페이 코호트 대시보드 v2.7.7</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -775,6 +775,15 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.7.7",
+    date: "2026-05-23",
+    label: "API 정렬·limit 수정 — 최신 항목 누락 방지",
+    items: [
+      { type:"fix", text:"memo·todo·activity API: limit 100→500, sort=createdAt&order=desc 추가 (오래된 순 반환으로 최신 주간 데이터 누락되던 문제)" },
+      { type:"fix", text:"정렬 파라미터 미지원 시 기본 호출 fallback 추가" }
+    ]
+  },
   {
     version: "2.7.6",
     date: "2026-05-23",
@@ -3210,8 +3219,8 @@ function renderWeeklyCohort(data) {
 async function salesmapGetAllActivities() {
   try {
     const [dealData, leadData] = await Promise.all([
-      salesmapGet('/v2/deal/activity?limit=100').catch(() => null),
-      salesmapGet('/v2/lead/activity?limit=100').catch(() => null)
+      salesmapGet('/v2/deal/activity?limit=500&sort=createdAt&order=desc').catch(() => null),
+      salesmapGet('/v2/lead/activity?limit=500&sort=createdAt&order=desc').catch(() => null)
     ]);
     const dealList = dealData?.data?.dealActivityList || dealData?.data?.activityList || dealData?.data?.items || [];
     const leadList = leadData?.data?.leadActivityList || leadData?.data?.activityList || leadData?.data?.items || [];
@@ -3223,24 +3232,32 @@ async function salesmapGetAllActivities() {
   }
 }
 
-// 노트 목록 조회 — /v2/memo (실제 엔드포인트)
+// 노트 목록 조회 — /v2/memo (최신 순, 최대 500건)
 async function salesmapGetAllNotes() {
   try {
-    const data = await salesmapGet('/v2/memo?limit=100');
+    const data = await salesmapGet('/v2/memo?limit=500&sort=createdAt&order=desc');
     const list = data?.data?.memoList || data?.items || data?.data?.items || [];
-    return list.length > 0 ? list : null;
+    if (list.length > 0) return list;
+    // fallback: 정렬 파라미터 미지원 시 기본 호출
+    const data2 = await salesmapGet('/v2/memo?limit=500');
+    const list2 = data2?.data?.memoList || data2?.items || data2?.data?.items || [];
+    return list2.length > 0 ? list2 : null;
   } catch(e) {
     console.warn('memo API unavailable', e);
     return null;
   }
 }
 
-// TODO 목록 조회 — /v2/todo (실제 엔드포인트)
+// TODO 목록 조회 — /v2/todo (최신 순, 최대 500건)
 async function salesmapGetAllTasks() {
   try {
-    const data = await salesmapGet('/v2/todo?limit=100');
+    const data = await salesmapGet('/v2/todo?limit=500&sort=시작일&order=desc');
     const list = data?.data?.todoList || data?.items || data?.data?.items || [];
-    return list.length > 0 ? list : null;
+    if (list.length > 0) return list;
+    // fallback: 정렬 파라미터 미지원 시 기본 호출
+    const data2 = await salesmapGet('/v2/todo?limit=500');
+    const list2 = data2?.data?.todoList || data2?.items || data2?.data?.items || [];
+    return list2.length > 0 ? list2 : null;
   } catch(e) {
     console.warn('todo API unavailable', e);
     return null;
