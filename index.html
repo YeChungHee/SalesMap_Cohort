@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.9.0</title>
+<title>플로우페이 코호트 대시보드 v2.10.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -252,8 +252,8 @@ tbody tr:hover td{background:var(--primary-50)}
     <div class="topbar-controls">
       <select class="ctrl" id="ctrl-role">
         <option value="admin">👑 관리자 (admin)</option>
-        <option value="operations" selected>⚙️ 운영 (operations)</option>
-        <option value="investor">📈 투자자 (investor)</option>
+        <option value="operations" selected>운영 (operations)</option>
+        <option value="investor">투자자 (investor)</option>
         <option value="read_only">👁 읽기 전용</option>
       </select>
       <select class="ctrl" id="ctrl-period">
@@ -428,7 +428,7 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card" style="margin-bottom:16px">
         <div class="card-header">
           <h3>세일즈 활동 API 검증 <button class="info-btn" onclick="showInfoModal('api_validate')" title="항목 설명">ⓘ</button></h3>
-          <button class="btn primary" id="btn-validate-apis" style="font-size:12px;height:30px;padding:0 12px">🔍 검증 실행</button>
+          <button class="btn primary" id="btn-validate-apis" style="font-size:12px;height:30px;padding:0 12px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>검증 실행</button>
         </div>
         <div id="api-validate-result" style="padding:14px 18px;font-size:12px;color:var(--fg-3)">
           검증 실행 버튼을 누르면 /v2/memo · /v2/todo · /v2/deal/activity 응답을 확인합니다.
@@ -746,11 +746,11 @@ tbody tr:hover td{background:var(--primary-50)}
         <div class="card-body" style="padding:12px 16px;font-size:13px;color:var(--fg-3)">
           보고 기간: <strong id="weekly-period-text">—</strong>
           &nbsp;
-          <button id="btn-weekly-refresh" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px">🔄 새로고침</button>
+          <button id="btn-weekly-refresh" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px;display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>새로고침</button>
           &nbsp;
-          <button id="btn-weekly-save" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px">💾 저장</button>
+          <button id="btn-weekly-save" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px;display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>저장</button>
           &nbsp;
-          <button id="btn-weekly-md" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px">📥 MD</button>
+          <button id="btn-weekly-md" class="ctrl" style="font-size:12px;padding:2px 8px;height:26px;display:inline-flex;align-items:center;gap:4px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>MD</button>
         </div>
       </div>
 
@@ -789,15 +789,55 @@ tbody tr:hover td{background:var(--primary-50)}
 
     <!-- ══════ 보고서 목록 ══════ -->
     <div class="section" id="view-reports">
+
+      <!-- 주간 보고서 섹션 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>주간 보고서</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="rpt-year-weekly" onchange="renderWeeklyReports()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border-1);border-radius:var(--radius-sm);background:var(--bg-1);color:var(--fg-2);cursor:pointer">
+              <option value="2026" selected>2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="">전체</option>
+            </select>
+            <button id="btn-reports-clear-weekly" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;color:var(--danger-500)">전체 삭제</button>
+          </div>
+        </div>
+        <div class="card-body np"><div id="reports-weekly-wrap" style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div></div>
+      </div>
+
+      <!-- 분기 보고서 섹션 -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-header">
+          <h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>분기 보고서</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="rpt-year-quarterly" onchange="renderQuarterlyReports()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border-1);border-radius:var(--radius-sm);background:var(--bg-1);color:var(--fg-2);cursor:pointer">
+              <option value="2026" selected>2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="">전체</option>
+            </select>
+            <button id="btn-gen-quarterly" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;display:inline-flex;align-items:center;gap:4px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>분기 보고서 생성
+            </button>
+            <button id="btn-reports-clear-quarterly" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;color:var(--danger-500)">전체 삭제</button>
+          </div>
+        </div>
+        <div class="card-body np"><div id="reports-quarterly-wrap" style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div></div>
+      </div>
+
+      <!-- 연간 보고서 섹션 -->
       <div class="card">
         <div class="card-header">
-          <h3>🗂️ 보고서 목록</h3>
-          <button id="btn-reports-clear" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;color:var(--danger-500)">전체 삭제</button>
+          <h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>연간 보고서</h3>
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="rpt-year-annual" onchange="renderAnnualReports()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border-1);border-radius:var(--radius-sm);background:var(--bg-1);color:var(--fg-2);cursor:pointer">
+              <option value="2026" selected>2026</option><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option><option value="">전체</option>
+            </select>
+            <button id="btn-gen-annual" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;display:inline-flex;align-items:center;gap:4px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>연간 보고서 생성
+            </button>
+            <button id="btn-reports-clear-annual" class="ctrl" style="font-size:12px;padding:2px 10px;height:26px;color:var(--danger-500)">전체 삭제</button>
+          </div>
         </div>
-        <div class="card-body np">
-          <div id="reports-list-wrap" style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div>
-        </div>
+        <div class="card-body np"><div id="reports-annual-wrap" style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div></div>
       </div>
+
     </div>
 
     <!-- ══════ 업데이트 내역 ══════ -->
@@ -821,6 +861,21 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.10.0",
+    date: "2026-05-23",
+    label: "보고서 3섹션 재편 + 분기·연간 보고서 생성 + GitHub Actions 일일 Slack",
+    items: [
+      { type:"feat", text:"보고서 목록 3섹션: 주간·분기·연간 분리, 연도 드롭다운 필터(전체/2026~2022)" },
+      { type:"feat", text:"분기 보고서 자동 생성 — 해당 분기 주간 보고서 집계 + MD 저장" },
+      { type:"feat", text:"연간 보고서 자동 생성 — 분기별 주간 보고서 수 집계 + MD 저장" },
+      { type:"feat", text:"GitHub Actions daily-slack.yml — 매주 월~금 09:00 KST 자동 Slack 전송" },
+      { type:"feat", text:".github/scripts/daily-slack.js — SalesMap API 전날 활동 집계 + Block Kit 메시지" },
+      { type:"fix",  text:"보고서 저장 후 목록 미표시 버그 수정 — generateWeeklyMd actData.contact → actData.activity" },
+      { type:"fix",  text:"type:'weekly' 필드 주간 보고서 객체에 추가 — 섹션 필터 정상 작동" },
+      { type:"refactor", text:"renderReportsList() → renderWeeklyReports/QuarterlyReports/AnnualReports() 3함수 분리" }
+    ]
+  },
   {
     version: "2.9.0",
     date: "2026-05-23",
@@ -1558,6 +1613,29 @@ function renderUpdates() {
 // ══════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const fmt = n => Number(n).toLocaleString("ko-KR");
+
+// SVG 아이콘 헬퍼 — Lucide 스트로크 스타일
+function svgIcon(name, color = "currentColor", size = 14) {
+  const s = `width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0"`;
+  const paths = {
+    "check-circle":    `<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>`,
+    "x-circle":        `<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>`,
+    "alert-triangle":  `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`,
+    "info":            `<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>`,
+    "clock":           `<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+    "zap":             `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+    "settings":        `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
+    "trending-up":     `<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>`,
+    "download":        `<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
+    "save":            `<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>`,
+    "rotate-cw":       `<polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>`,
+    "search":          `<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+    "folder-open":     `<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>`,
+    "calendar":        `<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
+    "bar-chart-2":     `<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
+  };
+  return `<svg ${s}>${paths[name] || ""}</svg>`;
+}
 const pct = (a, b) => b ? (a / b * 100).toFixed(1) + "%" : "–";
 const now = () => new Date().toLocaleString("ko-KR");
 
@@ -2570,14 +2648,14 @@ function renderChannelDiag() {
       const rate = org ? (deal / org * 100).toFixed(0) : "–";
       const warn = org > 5 && deal <= 1;
       return `<tr style="border-bottom:1px solid var(--line-light,#f1f5f9)${warn ? ";background:rgba(239,68,68,.04)" : ""}">
-        <td style="padding:7px 8px;font-weight:${warn ? 600 : 400}">${k}${warn ? ' <span style="color:var(--red);font-size:11px">⚠ 딜 미생성</span>' : ""}</td>
+        <td style="padding:7px 8px;font-weight:${warn ? 600 : 400}">${k}${warn ? ` <span style="color:var(--red);font-size:11px;display:inline-flex;align-items:center;gap:2px">${svgIcon("alert-triangle","currentColor",10)} 딜 미생성</span>` : ""}</td>
         <td style="text-align:right;padding:7px 8px">${org}</td>
         <td style="text-align:right;padding:7px 8px;color:${deal === 0 ? "var(--red)" : "inherit"}">${deal}</td>
         <td style="text-align:right;padding:7px 8px;color:var(--muted)">${rate}${rate !== "–" ? "%" : ""}</td>
       </tr>`;
     }).join("")}</tbody>
   </table>
-  <div style="margin-top:10px;font-size:11px;color:var(--muted)">⚠ 표시 = 등록 업체는 많지만 파이프라인에 딜이 없거나 1건 이하인 채널</div>`;
+  <div style="margin-top:10px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px">${svgIcon("alert-triangle","currentColor",11)} 표시 = 등록 업체는 많지만 파이프라인에 딜이 없거나 1건 이하인 채널</div>`;
 }
 
 // 유입경로_상세 항목 진단
@@ -3030,7 +3108,7 @@ function renderQualityKPI() {
 function renderStaging() {
   const pending = STATE.staging.filter(s => !STATE.stagingReviewed.has(s.id));
   if (!pending.length) {
-    $("staging-list").innerHTML = '<div class="empty">✅ 검토 대기 이벤트 없음</div>';
+    $("staging-list").innerHTML = `<div class="empty" style="display:flex;align-items:center;justify-content:center;gap:6px">${svgIcon("check-circle","var(--green-600,#16a34a)",14)} 검토 대기 이벤트 없음</div>`;
     return;
   }
   $("staging-list").innerHTML = pending.map(s => {
@@ -3136,7 +3214,11 @@ function renderSLA() {
   $("sla-cards").innerHTML = STATE.slaJobs.map(j => {
     const auto = computeSLAStatus(); const st = STATE.slaOverride[j.id] || auto[j.id] || j.status;
     const sc = st === "validated" ? "green" : st === "delayed" ? "orange" : st === "failed" ? "red" : "blue";
-    const icon = st === "validated" ? "✅" : st === "delayed" ? "⏳" : st === "failed" ? "❌" : st === "partial" ? "⚡" : "🕐";
+    const icon = st === "validated" ? svgIcon("check-circle","var(--green-600,#16a34a)")
+      : st === "delayed"   ? svgIcon("clock","var(--orange-500,#f97316)")
+      : st === "failed"    ? svgIcon("x-circle","var(--red-600,#dc2626)")
+      : st === "partial"   ? svgIcon("zap","var(--blue-500,#3b82f6)")
+      : svgIcon("clock","var(--fg-4)");
     const countdown = j.id === "weekly"
       ? `<div class="sla-countdown ${cdClass}">다음: ${countdownStr}</div>` : "";
     return `<div class="sla-card">
@@ -3200,7 +3282,7 @@ function buildSlackMsg(status) {
 딜 전환율: ${pct(t.deals,t.input)} / 결제율: ${pct(t.paid,t.deals)}
 
 🔧 API 연동
-Worker: ${cfg.useWorker ? "✅ 사용" : "⚠ 미설정"} / Token: ${cfg.token ? "✅ 설정됨" : "❌ 미설정"}
+Worker: ${cfg.useWorker ? svgIcon("check-circle","#16a34a",12)+" 사용" : svgIcon("alert-triangle","#d97706",12)+" 미설정"} / Token: ${cfg.token ? svgIcon("check-circle","#16a34a",12)+" 설정됨" : svgIcon("x-circle","#dc2626",12)+" 미설정"}
 매핑 해시: ${cfg.mappingHash || "Phase 1 확인 중"}
 
 대시보드: ${location.href}`;
@@ -3340,11 +3422,11 @@ function renderFieldSnapshotCard() {
   if (cntEl) cntEl.textContent = d.sampledCount || "–";
 
   const levelMeta = {
-    ok:          { cls:"pill-green",  bg:"#f0fdf4", bc:"#86efac", icon:"✅", title:"필드 구조 정상",              body:"" },
-    stale:       { cls:"pill-gray",   bg:"#f8fafc", bc:"#cbd5e1", icon:"🕐", title:"스냅샷 만료 (30일 초과)",     body:"필드 갱신을 권장합니다." },
-    info:        { cls:"pill-gray",   bg:"#f8fafc", bc:"#cbd5e1", icon:"ℹ️",  title:"일부 정보 필드 없음",          body:"" },
-    warn:        { cls:"pill-orange", bg:"#fffbeb", bc:"#fcd34d", icon:"⚠️", title:"세그멘테이션 필드 없음",       body:"" },
-    filter:      { cls:"pill-orange", bg:"#fff7ed", bc:"#fb923c", icon:"⚠️", title:"커버리지 손실 — 사업자번호 없음", body:"" },
+    ok:          { cls:"pill-green",  bg:"#f0fdf4", bc:"#86efac", icon:svgIcon("check-circle","#16a34a",13), title:"필드 구조 정상",              body:"" },
+    stale:       { cls:"pill-gray",   bg:"#f8fafc", bc:"#cbd5e1", icon:svgIcon("clock","#6b7280",13),        title:"스냅샷 만료 (30일 초과)",     body:"필드 갱신을 권장합니다." },
+    info:        { cls:"pill-gray",   bg:"#f8fafc", bc:"#cbd5e1", icon:svgIcon("info","#6b7280",13),         title:"일부 정보 필드 없음",          body:"" },
+    warn:        { cls:"pill-orange", bg:"#fffbeb", bc:"#fcd34d", icon:svgIcon("alert-triangle","#d97706",13),title:"세그멘테이션 필드 없음",       body:"" },
+    filter:      { cls:"pill-orange", bg:"#fff7ed", bc:"#fb923c", icon:svgIcon("alert-triangle","#ea580c",13),title:"커버리지 손실 — 사업자번호 없음", body:"" },
     no_data:     { cls:"pill-gray",   bg:"#f8fafc", bc:"#cbd5e1", icon:"📭", title:"Organization 데이터 없음",     body:"Organization을 먼저 생성하세요." },
     no_snapshot: { cls:"pill-gray",   bg:null,      bc:null,      icon:"",   title:"",                            body:"" }
   };
@@ -3368,10 +3450,10 @@ function renderFieldSnapshotCard() {
       if (titleEl) titleEl.textContent = m.title;
       const lines = [];
       if (m.body)                   lines.push(m.body);
-      if (d.missingFilter.length)   lines.push("❌ 커버리지 손실 필드: " + d.missingFilter.join(", "));
-      if (d.missingWarn.length)     lines.push("⚠️ 세그멘테이션 손실: " + d.missingWarn.join(", "));
-      if (d.missingFallback.length) lines.push("📋 폴백 필드 없음: " + d.missingFallback.join(", "));
-      if (d.missingInfo.length)     lines.push("ℹ️ 정보 필드 없음: " + d.missingInfo.join(", "));
+      if (d.missingFilter.length)   lines.push(svgIcon("x-circle","#dc2626",11)+" 커버리지 손실 필드: " + d.missingFilter.join(", "));
+      if (d.missingWarn.length)     lines.push(svgIcon("alert-triangle","#d97706",11)+" 세그멘테이션 손실: " + d.missingWarn.join(", "));
+      if (d.missingFallback.length) lines.push(svgIcon("info","#6b7280",11)+" 폴백 필드 없음: " + d.missingFallback.join(", "));
+      if (d.missingInfo.length)     lines.push(svgIcon("info","#6b7280",11)+" 정보 필드 없음: " + d.missingInfo.join(", "));
       if (bodyEl) bodyEl.innerHTML = lines.join("<br>");
     }
   }
@@ -3399,7 +3481,7 @@ function renderFieldSnapshotCard() {
           else if (isWarn) { bg="#fefce8"; color="#854d0e"; border="#fde68a"; }
           else             { bg="#f8fafc"; color="#475569"; border="#e2e8f0"; }
         }
-        const prefix = !exists ? (isFilter ? "❌ " : isWarn ? "⚠️ " : "– ") : (isFilter ? "✅ " : "");
+        const prefix = !exists ? (isFilter ? svgIcon("x-circle","#dc2626",11)+" " : isWarn ? svgIcon("alert-triangle","#d97706",11)+" " : "– ") : (isFilter ? svgIcon("check-circle","#16a34a",11)+" " : "");
         return `<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:12px;font-size:11px;background:${bg};color:${color};border:1px solid ${border}">${prefix}${name}</span>`;
       }).join("");
     }
@@ -3452,10 +3534,10 @@ function repopulateSourceFilter() {
 function renderRoleBadge() {
   const role = STATE.role;
   const ROLE_CFG = {
-    admin:      { label:"관리자",  emoji:"👑", cls:"role-admin",      navHide:[], refreshOff:false },
-    operations: { label:"운영",    emoji:"⚙️", cls:"role-operations", navHide:[], refreshOff:false },
-    investor:   { label:"투자자",  emoji:"📈", cls:"role-investor",   navHide:["pipeline","quality","ledger","settings"], refreshOff:true  },
-    read_only:  { label:"읽기전용",emoji:"👁", cls:"role-read_only",  navHide:["settings"],          refreshOff:true  }
+    admin:      { label:"관리자",  icon:svgIcon("settings","currentColor",13),     cls:"role-admin",      navHide:[], refreshOff:false },
+    operations: { label:"운영",    icon:svgIcon("settings","currentColor",13),     cls:"role-operations", navHide:[], refreshOff:false },
+    investor:   { label:"투자자",  icon:svgIcon("trending-up","currentColor",13),  cls:"role-investor",   navHide:["pipeline","quality","ledger","settings"], refreshOff:true  },
+    read_only:  { label:"읽기전용",icon:svgIcon("info","currentColor",13),         cls:"role-read_only",  navHide:["settings"],          refreshOff:true  }
   };
   const cfg = ROLE_CFG[role] || ROLE_CFG.operations;
 
@@ -4124,31 +4206,47 @@ function saveReport(report) {
 }
 
 function deleteReport(id) {
-  const list = loadSavedReports().filter(r => r.id !== id);
+  const all = loadSavedReports();
+  const target = all.find(r => r.id === id);
+  const type = target?.type || "weekly";
+  const list = all.filter(r => r.id !== id);
   localStorage.setItem(REPORTS_KEY, JSON.stringify(list));
-  renderReportsList();
+  if (type === "quarterly") renderQuarterlyReports();
+  else if (type === "annual") renderAnnualReports();
+  else renderWeeklyReports();
 }
 
-function renderReportsList() {
-  const wrap = $("reports-list-wrap");
+function _renderReportsInto(wrapId, type, yearSelectId) {
+  const wrap = $(wrapId);
   if (!wrap) return;
-  const list = loadSavedReports();
+  const yearSel = $(yearSelectId);
+  const selYear = yearSel ? yearSel.value : "all";
+  let list = loadSavedReports().filter(r => (r.type || "weekly") === type);
+  if (selYear !== "all") list = list.filter(r => (r.savedAt || "").startsWith(selYear));
   if (!list.length) {
-    wrap.innerHTML = `<div style="padding:40px;text-align:center;color:var(--fg-4)">저장된 보고서가 없습니다.</div>`;
+    wrap.innerHTML = `<div style="padding:32px;text-align:center;color:var(--fg-4);font-size:13px">저장된 ${type === "weekly" ? "주간" : type === "quarterly" ? "분기" : "연간"} 보고서가 없습니다.</div>`;
     return;
   }
   wrap.innerHTML = list.map(r => `
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line-1)">
       <div>
         <div style="font-weight:600;font-size:14px;color:var(--fg-1)">${r.title}</div>
-        <div style="font-size:12px;color:var(--fg-4);margin-top:2px">${r.savedAt} · 코호트 ${r.cohortRows}개 채널</div>
+        <div style="font-size:12px;color:var(--fg-4);margin-top:2px">${r.savedAt} · 코호트 ${r.cohortRows ?? "-"}개 채널</div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="downloadReportMd('${r.id}')" class="ctrl" style="font-size:12px;padding:2px 10px;height:28px">📥 MD</button>
+        <button onclick="downloadReportMd('${r.id}')" class="ctrl" style="font-size:12px;padding:2px 10px;height:28px;display:inline-flex;align-items:center;gap:4px">${svgIcon("download","currentColor",12)} MD</button>
         <button onclick="deleteReport('${r.id}')" class="ctrl" style="font-size:12px;padding:2px 10px;height:28px;color:var(--danger-500)">삭제</button>
       </div>
     </div>`).join('');
 }
+
+function renderWeeklyReports()    { _renderReportsInto("reports-weekly-wrap",    "weekly",    "rpt-year-weekly"); }
+function renderQuarterlyReports() { _renderReportsInto("reports-quarterly-wrap", "quarterly", "rpt-year-quarterly"); }
+function renderAnnualReports()    { _renderReportsInto("reports-annual-wrap",    "annual",    "rpt-year-annual"); }
+function renderAllReports()       { renderWeeklyReports(); renderQuarterlyReports(); renderAnnualReports(); }
+
+// legacy alias — kept so any stray reference doesn't throw
+function renderReportsList() { renderAllReports(); }
 
 function downloadReportMd(id) {
   const report = loadSavedReports().find(r => r.id === id);
@@ -4159,6 +4257,84 @@ function downloadReportMd(id) {
   a.download = `${report.filename}.md`;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+// ══════════════════════════════════════════════
+//  분기·연간 보고서 생성 (Task #46)
+// ══════════════════════════════════════════════
+async function generateQuarterlyReport(year, q) {
+  // 분기 시작/종료 날짜 계산
+  const qStart = new Date(year, (q-1)*3, 1);
+  const qEnd   = new Date(year, q*3, 0);
+  const fmt2   = d => d.toISOString().slice(0,10);
+  const label  = `${year}년 Q${q} (${fmt2(qStart)} ~ ${fmt2(qEnd)})`;
+
+  // 주간 보고서에서 해당 분기 내 저장된 주간 보고서를 집계
+  const weeklies = loadSavedReports().filter(r => {
+    if ((r.type || "weekly") !== "weekly") return false;
+    const saved = new Date((r.savedAt || "").slice(0,10));
+    return saved >= qStart && saved <= qEnd;
+  });
+
+  let md = `# ${label} 분기 보고서\n\n`;
+  md += `> 생성일시: ${now()}\n\n`;
+  md += `## 요약\n\n`;
+  md += `이 분기 내 저장된 주간 보고서: **${weeklies.length}건**\n\n`;
+  if (weeklies.length > 0) {
+    md += `### 포함된 주간 보고서\n\n`;
+    weeklies.forEach(w => { md += `- ${w.title} (${w.savedAt})\n`; });
+    md += `\n`;
+  }
+  md += `---\n*이 보고서는 자동 집계 초안입니다. 세부 내용을 추가·수정하세요.*\n`;
+
+  return {
+    id: Date.now().toString(),
+    type: "quarterly",
+    title: `분기 보고서 ${label}`,
+    savedAt: now(),
+    filename: `quarterly-report-${year}-Q${q}`,
+    cohortRows: null,
+    md
+  };
+}
+
+async function generateAnnualReport(year) {
+  const annStart = new Date(year, 0, 1);
+  const annEnd   = new Date(year, 11, 31);
+  const fmt2     = d => d.toISOString().slice(0,10);
+  const label    = `${year}년 연간 (${fmt2(annStart)} ~ ${fmt2(annEnd)})`;
+
+  const quarters = [1,2,3,4].map(q => {
+    const qStart = new Date(year, (q-1)*3, 1);
+    const qEnd   = new Date(year, q*3, 0);
+    const rpts   = loadSavedReports().filter(r => {
+      if ((r.type || "weekly") !== "weekly") return false;
+      const saved = new Date((r.savedAt || "").slice(0,10));
+      return saved >= qStart && saved <= qEnd;
+    });
+    return { q, count: rpts.length };
+  });
+
+  let md = `# ${label} 연간 보고서\n\n`;
+  md += `> 생성일시: ${now()}\n\n`;
+  md += `## 분기별 주간 보고서 건수\n\n`;
+  md += `| 분기 | 주간 보고서 수 |\n|------|---------------|\n`;
+  quarters.forEach(({ q, count }) => {
+    md += `| Q${q} | ${count}건 |\n`;
+  });
+  const total = quarters.reduce((s,x) => s + x.count, 0);
+  md += `| **합계** | **${total}건** |\n\n`;
+  md += `---\n*이 보고서는 자동 집계 초안입니다. 세부 내용을 추가·수정하세요.*\n`;
+
+  return {
+    id: Date.now().toString(),
+    type: "annual",
+    title: `연간 보고서 ${year}년`,
+    savedAt: now(),
+    filename: `annual-report-${year}`,
+    cohortRows: null,
+    md
+  };
 }
 
 // ══════════════════════════════════════════════
@@ -4216,7 +4392,8 @@ document.querySelectorAll(".nav-btn[data-view]").forEach(btn => {
       renderWeeklyReport();
     }
     if (btn.dataset.view === "reports") {
-      renderReportsList();
+      populateReportYearDropdowns();
+      renderAllReports();
     }
   });
 });
@@ -4240,6 +4417,7 @@ $("btn-weekly-save")?.addEventListener("click", async () => {
     const dateStr = new Date().toISOString().slice(0,10);
     const report = {
       id: Date.now().toString(),
+      type: "weekly",
       title: `주간 보고서 ${range.label}`,
       savedAt: now(),
       filename: `weekly-report-${dateStr}`,
@@ -4270,11 +4448,73 @@ $("btn-weekly-md")?.addEventListener("click", async () => {
   toast("MD 파일을 다운로드합니다.");
 });
 
-$("btn-reports-clear")?.addEventListener("click", () => {
-  if (confirm("저장된 보고서를 모두 삭제할까요?")) {
-    localStorage.removeItem(REPORTS_KEY);
-    renderReportsList();
-    toast("보고서 목록을 삭제했습니다.");
+// 보고서 목록 — 연도 드롭다운 populate
+function populateReportYearDropdowns() {
+  const all = loadSavedReports();
+  const years = [...new Set(all.map(r => (r.savedAt || "").slice(0,4)).filter(Boolean))].sort((a,b) => b-a);
+  ["rpt-year-weekly","rpt-year-quarterly","rpt-year-annual"].forEach(id => {
+    const sel = $(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = `<option value="all">전체</option>` + years.map(y => `<option value="${y}">${y}</option>`).join('');
+    if (years.includes(cur)) sel.value = cur;
+  });
+}
+
+// 보고서 목록 — 섹션별 clear 버튼
+$("btn-reports-clear-weekly")?.addEventListener("click", () => {
+  if (confirm("주간 보고서를 모두 삭제할까요?")) {
+    const keep = loadSavedReports().filter(r => (r.type || "weekly") !== "weekly");
+    localStorage.setItem(REPORTS_KEY, JSON.stringify(keep));
+    renderWeeklyReports();
+    toast("주간 보고서를 삭제했습니다.");
+  }
+});
+$("btn-reports-clear-quarterly")?.addEventListener("click", () => {
+  if (confirm("분기 보고서를 모두 삭제할까요?")) {
+    const keep = loadSavedReports().filter(r => r.type !== "quarterly");
+    localStorage.setItem(REPORTS_KEY, JSON.stringify(keep));
+    renderQuarterlyReports();
+    toast("분기 보고서를 삭제했습니다.");
+  }
+});
+$("btn-reports-clear-annual")?.addEventListener("click", () => {
+  if (confirm("연간 보고서를 모두 삭제할까요?")) {
+    const keep = loadSavedReports().filter(r => r.type !== "annual");
+    localStorage.setItem(REPORTS_KEY, JSON.stringify(keep));
+    renderAnnualReports();
+    toast("연간 보고서를 삭제했습니다.");
+  }
+});
+
+// 분기 보고서 생성 (Task #46 완성 전 placeholder)
+$("btn-gen-quarterly")?.addEventListener("click", async () => {
+  toast("분기 보고서 생성 중...");
+  try {
+    const year = new Date().getFullYear();
+    const q    = Math.ceil((new Date().getMonth() + 1) / 3);
+    const report = await generateQuarterlyReport(year, q);
+    saveReport(report);
+    renderQuarterlyReports();
+    toast(`${year}년 Q${q} 분기 보고서가 저장되었습니다.`);
+  } catch(e) {
+    console.error("[btn-gen-quarterly]", e);
+    toast("⚠️ 분기 보고서 생성 실패: " + e.message);
+  }
+});
+
+// 연간 보고서 생성 (Task #46 완성 전 placeholder)
+$("btn-gen-annual")?.addEventListener("click", async () => {
+  toast("연간 보고서 생성 중...");
+  try {
+    const year = new Date().getFullYear();
+    const report = await generateAnnualReport(year);
+    saveReport(report);
+    renderAnnualReports();
+    toast(`${year}년 연간 보고서가 저장되었습니다.`);
+  } catch(e) {
+    console.error("[btn-gen-annual]", e);
+    toast("⚠️ 연간 보고서 생성 실패: " + e.message);
   }
 });
 
@@ -4406,7 +4646,7 @@ $("btn-validate-apis").addEventListener("click", async () => {
     html += `<div style="border:1px solid var(--line-1);border-radius:8px;padding:12px 14px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-weight:700;font-size:13px">${ep.label}</span>
-        ${badge(status==="ok", status==="ok"?"✅ 정상":status==="empty"?"⚠️ 빈 응답":"❌ 오류")}
+        ${badge(status==="ok", status==="ok"?svgIcon("check-circle","currentColor",11)+" 정상":status==="empty"?svgIcon("alert-triangle","currentColor",11)+" 빈 응답":svgIcon("x-circle","currentColor",11)+" 오류")}
       </div>
       <div style="font-size:11px;color:var(--fg-4);margin-bottom:6px">
         <code style="background:var(--bg-2);padding:1px 6px;border-radius:3px">${ep.path.split("?")[0]}</code>
@@ -4414,10 +4654,10 @@ $("btn-validate-apis").addEventListener("click", async () => {
       </div>
       ${sample ? `
         <div style="font-size:11px;margin-bottom:4px">
-          ${badge(hasType,   hasType   ? "✅ 유형 필드 있음" : "⚠️ 유형 필드 없음")}
-          ${badge(hasDate,   hasDate   ? "✅ 날짜 필드 있음" : "⚠️ 날짜 필드 없음")}
-          ${hasSmsId   ? badge(true, "✅ smsId") : ""}
-          ${hasEmailId ? badge(true, "✅ emailId") : ""}
+          ${badge(hasType,   hasType   ? svgIcon("check-circle","currentColor",11)+" 유형 필드 있음" : svgIcon("alert-triangle","currentColor",11)+" 유형 필드 없음")}
+          ${badge(hasDate,   hasDate   ? svgIcon("check-circle","currentColor",11)+" 날짜 필드 있음" : svgIcon("alert-triangle","currentColor",11)+" 날짜 필드 없음")}
+          ${hasSmsId   ? badge(true, svgIcon("check-circle","currentColor",11)+" smsId") : ""}
+          ${hasEmailId ? badge(true, svgIcon("check-circle","currentColor",11)+" emailId") : ""}
         </div>
         <details style="margin-top:6px">
           <summary style="font-size:11px;color:var(--primary-500);cursor:pointer">첫 번째 항목 보기</summary>
@@ -5399,7 +5639,7 @@ function renderPurchaseTypeTrend() {
   if (totalUnclassified > 0) {
     const warn = document.createElement("div");
     warn.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:6px 10px;border-radius:6px;background:#fef3c7;border:1px solid #f59e0b;font-size:12px;color:#92400e";
-    warn.innerHTML = `⚠️ 구매이력 미입력 딜 <strong>${totalUnclassified}건</strong> — 세일즈맵에서 구매이력(New/Repeat) 입력 필요`;
+    warn.innerHTML = `<span style="display:inline-flex;align-items:center;gap:5px">${svgIcon("alert-triangle","currentColor",13)} 구매이력 미입력 딜 <strong>${totalUnclassified}건</strong> — 세일즈맵에서 구매이력(New/Repeat) 입력 필요</span>`;
     el.appendChild(warn);
   }
 
