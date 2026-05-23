@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.5</title>
+<title>플로우페이 코호트 대시보드 v2.8.6</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -66,6 +66,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sb-section{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-700);padding:14px 8px 4px}
 .nav-btn{width:100%;background:none;border:none;color:var(--gray-500);text-align:left;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;transition:background var(--dur-fast) var(--ease-std),color var(--dur-fast)}
 .nav-btn .icon{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}.nav-btn .icon svg{width:15px;height:15px;stroke:currentColor}
+.nav-week-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:none;border:1px solid var(--border-1);border-radius:var(--radius-sm);font-size:12px;font-weight:500;color:var(--fg-3);cursor:pointer;transition:background var(--dur-fast) var(--ease-std),color var(--dur-fast)}.nav-week-btn:hover:not(:disabled){background:var(--bg-3);color:var(--fg-1)}.nav-week-btn:disabled{opacity:0.35;cursor:default}
 .nav-btn:hover{background:rgba(255,255,255,.06);color:var(--gray-200)}
 .nav-btn.active{background:rgba(45,84,214,.3);color:var(--primary-300)}
 .sb-foot{padding:14px 14px 20px;border-top:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--gray-600)}
@@ -735,7 +736,17 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card">
         <div class="card-header">
           <h3>세일즈 활동</h3>
-          <span class="pill pill-gray" id="weekly-period-pill">이번 주 기준</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button id="btn-weekly-prev" class="nav-week-btn" onclick="weeklyNavShift(-1)" title="전주">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              전주
+            </button>
+            <span class="pill pill-gray" id="weekly-period-pill" style="min-width:130px;text-align:center">이번 주 기준</span>
+            <button id="btn-weekly-next" class="nav-week-btn" onclick="weeklyNavShift(1)" title="다음주" disabled style="opacity:0.35;cursor:default">
+              다음주
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
         <div class="card-body">
           <div id="weekly-activity-wrap" style="padding:32px;text-align:center;color:var(--fg-4)">로딩 중…</div>
@@ -777,6 +788,19 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.6",
+    date: "2026-05-23",
+    label: "세일즈 활동 주간 네비게이션 — ← 전주 / 다음주 → 이동",
+    items: [
+      { type:"feat", text:"getWeeklyReportRange(offset): offset×7일 이동 지원 (0=현재, -1=전주, ...)" },
+      { type:"feat", text:"STATE.weeklyOffset + rawWeeklyNotes/Tasks/Acts 캐시 필드 추가" },
+      { type:"feat", text:"세일즈 활동 헤더에 ← 전주 / 다음주 → 네비게이션 버튼 (Lucide chevron SVG)" },
+      { type:"feat", text:"renderWeeklyReport: 최초 로드 시만 API fetch, 네비게이션은 캐시 재계산" },
+      { type:"feat", text:"weeklyNavShift(delta): offset 변경 후 API 없이 즉시 재렌더" },
+      { type:"fix",  text:"새로고침 버튼: offset 리셋 + 캐시 초기화 후 전체 재로드" }
+    ]
+  },
   {
     version: "2.8.5",
     date: "2026-05-23",
@@ -1677,7 +1701,11 @@ const STATE = {
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
   rawLeads:          [],         // 원본 리드 목록 (기간 필터 재계산용)
   rawOrgs:           [],         // 원본 조직 목록 (주간 보고서용)
-  weeklyActivity:    null,       // 주간 활동 데이터
+  weeklyActivity:    null,       // 주간 활동 데이터 (computeWeeklyActivity 결과)
+  weeklyOffset:      0,          // 0=현재 주, -1=전주, -2=전전주
+  rawWeeklyNotes:    null,       // API 원시 캐시 (salesmapGetAllNotes)
+  rawWeeklyTasks:    null,       // API 원시 캐시 (salesmapGetAllTasks)
+  rawWeeklyActs:     null,       // API 원시 캐시 (salesmapGetAllActivities)
   orgMap:            {},         // organizationId → { channel, detail, name } (유입경로 + 업체명 조인)
   orgChannelCount:   {},         // 진단: 채널별 등록 업체 수
   trendData:         [],         // 월별 구매 유형 추이 (computeMonthlyPurchaseTypeTrend 결과)
@@ -1745,7 +1773,8 @@ const STATE = {
 function topLevelOf(src) { return (src || "").split(" · ")[0].trim(); }
 
 // ── 주간 보고서 기간: 전주 금 16:00:01 ~ 당주 금 16:00:00 (KST) ──
-function getWeeklyReportRange() {
+// offset: 0=현재 주, -1=전주, -2=전전주 ...
+function getWeeklyReportRange(offset = 0) {
   const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
   const nowUtcMs = Date.now();
   const nowKstMs = nowUtcMs + KST_OFFSET_MS;
@@ -1780,8 +1809,10 @@ function getWeeklyReportRange() {
     ));
   }
 
-  // startFri = endFri - 7일 + 1초
-  const startFri = new Date(endFri.getTime() - 7 * 86400000 + 1000);
+  // offset 적용: offset×7일 이동 (0=현재, -1=전주, ...)
+  const shiftMs = offset * 7 * 86400000;
+  const endFriShifted   = new Date(endFri.getTime() + shiftMs);
+  const startFri        = new Date(endFriShifted.getTime() - 7 * 86400000 + 1000);
 
   // label 생성 (KST 표시)
   const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
@@ -1796,9 +1827,9 @@ function getWeeklyReportRange() {
     const ss  = String(kd.getUTCSeconds()).padStart(2, "0");
     return `${y}-${mo}-${dd} (${day}) ${hh}:${mm}:${ss}`;
   }
-  const label = `${kstLabel(startFri)} ~ ${kstLabel(endFri)}`;
+  const label = `${kstLabel(startFri)} ~ ${kstLabel(endFriShifted)}`;
 
-  return { start: startFri, end: endFri, label };
+  return { start: startFri, end: endFriShifted, label };
 }
 
 function isInWeeklyRange(dateStr) {
@@ -3363,8 +3394,8 @@ async function salesmapGetAllTasks(maxPages = 40) {
   return allItems.length > 0 ? allItems : null;
 }
 
-function computeWeeklyActivity(activities, notes, tasks) {
-  const { start, end } = getWeeklyReportRange();
+function computeWeeklyActivity(activities, notes, tasks, offset = 0) {
+  const { start, end } = getWeeklyReportRange(offset);
 
   // DB 생성: rawOrgs 중 생성 날짜가 기간 내인 것
   const newOrgs = STATE.rawOrgs.filter(org => {
@@ -3471,12 +3502,22 @@ function computeWeeklyActivity(activities, notes, tasks) {
   };
 }
 
-function renderWeeklyActivity(data) {
+function renderWeeklyActivity(data, offset = 0) {
   const wrap = $("weekly-activity-wrap");
   if (!wrap) return;
 
-  // ── 기간 pill 업데이트 (Stage 3) ──
-  const { start, end } = getWeeklyReportRange();
+  // ── 네비게이션 버튼 상태 업데이트 ──
+  const prevBtn = $("btn-weekly-prev");
+  const nextBtn = $("btn-weekly-next");
+  if (nextBtn) {
+    const atCurrentWeek = offset >= 0;
+    nextBtn.disabled = atCurrentWeek;
+    nextBtn.style.opacity = atCurrentWeek ? "0.35" : "1";
+    nextBtn.style.cursor  = atCurrentWeek ? "default" : "pointer";
+  }
+
+  // ── 기간 pill 업데이트 ──
+  const { start, end } = getWeeklyReportRange(offset);
   const fmtPillDate = d => {
     const DAY = ["일","월","화","수","목","금","토"];
     const m = d.getMonth() + 1, dd = d.getDate(), dw = DAY[d.getDay()];
@@ -3677,8 +3718,9 @@ function toggleActivityBackdata(id) {
 // ══════════════════════════════════════════════
 //  주간 보고서 — Task E: renderWeeklyReport + Slack
 // ══════════════════════════════════════════════
-async function renderWeeklyReport() {
-  const range = getWeeklyReportRange();
+async function renderWeeklyReport(forceRefetch = false) {
+  const offset = STATE.weeklyOffset;
+  const range = getWeeklyReportRange(offset);
   const rangeLabel = $("weekly-range-label");
   const periodText  = $("weekly-period-text");
   if (rangeLabel) rangeLabel.textContent = range.label;
@@ -3687,14 +3729,40 @@ async function renderWeeklyReport() {
   const cohortData = computeWeeklyCohort();
   renderWeeklyCohort(cohortData);
 
-  const [activities, notes, tasks] = await Promise.all([
-    salesmapGetAllActivities(),
-    salesmapGetAllNotes(),
-    salesmapGetAllTasks()
-  ]);
-  const actData = computeWeeklyActivity(activities, notes, tasks);
+  // API fetch — 최초 or 강제 새로고침 시에만 호출
+  if (!STATE.rawWeeklyActs || !STATE.rawWeeklyNotes || !STATE.rawWeeklyTasks || forceRefetch) {
+    const [activities, notes, tasks] = await Promise.all([
+      salesmapGetAllActivities(),
+      salesmapGetAllNotes(),
+      salesmapGetAllTasks()
+    ]);
+    STATE.rawWeeklyActs   = activities;
+    STATE.rawWeeklyNotes  = notes;
+    STATE.rawWeeklyTasks  = tasks;
+  }
+
+  const actData = computeWeeklyActivity(STATE.rawWeeklyActs, STATE.rawWeeklyNotes, STATE.rawWeeklyTasks, offset);
   STATE.weeklyActivity = actData;
-  renderWeeklyActivity(actData);
+  renderWeeklyActivity(actData, offset);
+}
+
+// ── 주간 네비게이션: 캐시 데이터로 오프셋만 변경해 재계산 ──
+function weeklyNavShift(delta) {
+  const newOffset = STATE.weeklyOffset + delta;
+  if (newOffset > 0) return; // 미래 주는 이동 불가
+  // 캐시 없으면 무시 (아직 API 미로드)
+  if (!STATE.rawWeeklyActs && !STATE.rawWeeklyNotes && !STATE.rawWeeklyTasks) return;
+  STATE.weeklyOffset = newOffset;
+  // 오프셋에 맞게 재계산 (API 재호출 없음)
+  const actData = computeWeeklyActivity(STATE.rawWeeklyActs, STATE.rawWeeklyNotes, STATE.rawWeeklyTasks, newOffset);
+  STATE.weeklyActivity = actData;
+  renderWeeklyActivity(actData, newOffset);
+  // 범위 레이블도 업데이트
+  const range = getWeeklyReportRange(newOffset);
+  const rangeLabel = $("weekly-range-label");
+  const periodText  = $("weekly-period-text");
+  if (rangeLabel) rangeLabel.textContent = range.label;
+  if (periodText)  periodText.textContent = range.label;
 }
 
 function generateWeeklyMd(cohortData, actData) {
@@ -3882,8 +3950,14 @@ document.querySelectorAll(".nav-btn[data-view]").forEach(btn => {
   });
 });
 
-// 주간 보고서 새로고침 버튼
-$("btn-weekly-refresh")?.addEventListener("click", () => { renderWeeklyReport(); });
+// 주간 보고서 새로고침 버튼 — offset 리셋 + 캐시 초기화
+$("btn-weekly-refresh")?.addEventListener("click", () => {
+  STATE.weeklyOffset   = 0;
+  STATE.rawWeeklyActs  = null;
+  STATE.rawWeeklyNotes = null;
+  STATE.rawWeeklyTasks = null;
+  renderWeeklyReport(true);
+});
 
 $("btn-weekly-save")?.addEventListener("click", async () => {
   // 액티비티 데이터가 아직 로드 안 됐으면 먼저 await
