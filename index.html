@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.1</title>
+<title>플로우페이 코호트 대시보드 v2.8.2</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -65,7 +65,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sb-nav{padding:12px 8px;flex:1}
 .sb-section{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--gray-700);padding:14px 8px 4px}
 .nav-btn{width:100%;background:none;border:none;color:var(--gray-500);text-align:left;padding:8px 10px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;transition:background var(--dur-fast) var(--ease-std),color var(--dur-fast)}
-.nav-btn .icon{width:16px;text-align:center;flex-shrink:0;font-size:14px}
+.nav-btn .icon{width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}.nav-btn .icon svg{width:15px;height:15px;stroke:currentColor}
 .nav-btn:hover{background:rgba(255,255,255,.06);color:var(--gray-200)}
 .nav-btn.active{background:rgba(45,84,214,.3);color:var(--primary-300)}
 .sb-foot{padding:14px 14px 20px;border-top:1px solid rgba(255,255,255,.07);font-size:12px;color:var(--gray-600)}
@@ -217,18 +217,18 @@ tbody tr:hover td{background:var(--primary-50)}
   </div>
   <div class="sb-nav">
     <div class="sb-section">분석</div>
-    <button class="nav-btn active" data-view="overview"><span class="icon">📊</span>대시보드</button>
-    <button class="nav-btn" data-view="cohort"><span class="icon">📅</span>코호트 분석</button>
-    <button class="nav-btn" data-view="pipeline"><span class="icon">🔀</span>파이프라인</button>
+    <button class="nav-btn active" data-view="overview"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg></span>대시보드</button>
+    <button class="nav-btn" data-view="cohort"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>코호트 분석</button>
+    <button class="nav-btn" data-view="pipeline"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>파이프라인</button>
     <div class="sb-section">운영</div>
-    <button class="nav-btn" data-view="quality"><span class="icon">🔍</span>데이터 품질</button>
-    <button class="nav-btn" data-view="sla"><span class="icon">🕐</span>보고서 &amp; 알림</button>
-    <button class="nav-btn" data-view="ledger"><span class="icon">📋</span>이벤트 원장</button>
+    <button class="nav-btn" data-view="quality"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>데이터 품질</button>
+    <button class="nav-btn" data-view="sla"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>보고서 &amp; 알림</button>
+    <button class="nav-btn" data-view="ledger"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>이벤트 원장</button>
     <div class="sb-section">설정</div>
-    <button class="nav-btn" data-view="settings"><span class="icon">⚙️</span>연동 설정</button>
-    <button class="nav-btn" data-view="weekly"><span class="icon">📆</span>주간 보고</button>
-    <button class="nav-btn" data-view="reports"><span class="icon">🗂️</span>보고서 목록</button>
-    <button class="nav-btn" data-view="updates"><span class="icon">📝</span>업데이트 내역</button>
+    <button class="nav-btn" data-view="settings"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>연동 설정</button>
+    <button class="nav-btn" data-view="weekly"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/></svg></span>주간 보고</button>
+    <button class="nav-btn" data-view="reports"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>보고서 목록</button>
+    <button class="nav-btn" data-view="updates"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></span>업데이트 내역</button>
   </div>
   <div class="sb-foot">
     <strong id="sb-slack-user">@예충희</strong>Slack 수신자
@@ -775,6 +775,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.2",
+    date: "2026-05-23",
+    label: "전체 nav 이모지 → SVG + 업체명 누락 수정",
+    items: [
+      { type:"feat", text:"사이드바 nav 10개 이모지 → Lucide 스타일 SVG (active/hover 컬러 자동 적용)" },
+      { type:"fix",  text:"노트 업체명 누락: organizationName·dealName·organization.name 등 15개 필드 확장 + 텍스트 스니펫 폴백" },
+      { type:"fix",  text:"액티비티 업체명 누락: getActOrg() 전용 헬퍼 분리, 동일 필드 확장" },
+      { type:"fix",  text:"콘솔 디버그 로그 추가: [noteFields] [actFields] — 실제 API 필드 확인 가능" }
+    ]
+  },
   {
     version: "2.8.1",
     date: "2026-05-23",
@@ -3458,10 +3469,36 @@ function renderWeeklyActivity(data) {
     `<span style="font-size:11px;color:${color};background:${color}18;border-radius:4px;padding:2px 7px;margin-right:4px">${label} <b>${n}</b></span>`;
 
   // ── 백데이터 헬퍼 ──
+  // 조직/딜/리드 아이템에서 이름 추출
   const getOrgName = item =>
-    item["이름"] || item.name || item["회사명"] || item["조직명"] || "—";
-  const getNoteOrg = n =>
-    n["조직"] || n["회사"] || n["거래처"] || n.organization?.name || n.deal?.name || "—";
+    item["이름"] || item.name || item["회사명"] || item["조직명"]
+    || item["organization"]?.["이름"] || item["organization"]?.name
+    || "—";
+  // SalesMap memo/activity는 조직명 인라인 미포함 → 가능한 모든 필드 탐색 후 텍스트 스니펫 폴백
+  const getNoteOrg = n => {
+    const direct = n["조직"] || n["회사"] || n["거래처"] || n["조직명"] || n["회사명"]
+      || n["organizationName"] || n["dealName"] || n["leadName"]
+      || n.organization?.name || n.organization?.["이름"]
+      || n.deal?.name || n.deal?.["이름"]
+      || n.lead?.name || n.lead?.["이름"]
+      || n["관련 조직"] || n["담당 조직"] || n["연결 조직"];
+    if (direct) return direct;
+    // 텍스트 스니펫 폴백 (최대 18자)
+    const txt = n.text || n["텍스트"] || n.content || n["내용"] || "";
+    return txt ? txt.slice(0, 18).trim() + (txt.length > 18 ? "…" : "") : "—";
+  };
+  const getActOrg = a => {
+    const direct = a["조직"] || a["회사"] || a["조직명"] || a["organizationName"]
+      || a["dealName"] || a["leadName"]
+      || a.organization?.name || a.organization?.["이름"]
+      || a.deal?.name || a.deal?.["이름"]
+      || a.lead?.name || a.lead?.["이름"]
+      || a.contact?.name || a.contact?.["이름"];
+    return direct || "—";
+  };
+  // 첫 아이템 필드 구조 디버그 (개발자도구 콘솔에서 확인)
+  if (data.noteItems?.[0]) console.log("[noteFields]", Object.keys(data.noteItems[0]), data.noteItems[0]);
+  if (data.activity?.items?.[0]) console.log("[actFields]", Object.keys(data.activity.items[0]), data.activity.items[0]);
   const fmtDate = iso => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -3569,7 +3606,7 @@ function renderWeeklyActivity(data) {
     const isSms   = a.smsId || (a.type||"").toLowerCase().includes("sms");
     const isEmail = a.emailId || a.emailMessageId || (a.type||"").toLowerCase().includes("email");
     const typeLabel = isSms ? "문자" : isEmail ? "이메일" : (a.type||"활동");
-    const org = a["조직"] || a["회사"] || a.organization?.name || a.contact?.name || "—";
+    const org = getActOrg(a);
     return bdRow(org, `${typeLabel} · ${fmtDate(a.date||a.createdAt)}`);
   }).join("") + (data.activity?.items?.length > 30
     ? `<div style="font-size:11px;color:var(--fg-4);text-align:center;padding:6px 0">… 외 ${data.activity.items.length-30}건</div>` : "");
