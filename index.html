@@ -338,12 +338,12 @@ tbody tr:hover td{background:var(--primary-50)}
           <h3>월별 × 유입경로 코호트 히트맵 <button class="info-btn" onclick="showInfoModal('heatmap')" title="항목 설명">ⓘ</button></h3>
           <div style="display:flex;align-items:center;gap:8px">
             <select id="heatmap-year-filter" onchange="renderHeatmap()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border-1);border-radius:var(--radius-sm);background:var(--bg-1);color:var(--fg-2);cursor:pointer">
-              <option value="">전체</option>
-              <option value="2026">2026</option>
+              <option value="2026" selected>2026</option>
               <option value="2025">2025</option>
               <option value="2024">2024</option>
               <option value="2023">2023</option>
               <option value="2022">2022</option>
+              <option value="">전체</option>
             </select>
             <span class="pill pill-gray">딜 전환율 기준</span>
           </div>
@@ -372,7 +372,17 @@ tbody tr:hover td{background:var(--primary-50)}
       <div class="card" style="margin-top:16px">
         <div class="card-header">
           <h3>월별 자금집행 이력 <button class="info-btn" onclick="showInfoModal('jiphaeng_history')" title="항목 설명">ⓘ</button></h3>
-          <span class="pill pill-gray">자금집행 완료일 기준 · 전체 기간</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <select id="jiphaeng-year-filter" onchange="renderJiphaengHistory()" style="font-size:12px;padding:3px 8px;border:1px solid var(--border-1);border-radius:var(--radius-sm);background:var(--bg-1);color:var(--fg-2);cursor:pointer">
+              <option value="2026" selected>2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+              <option value="2022">2022</option>
+              <option value="">전체</option>
+            </select>
+            <span class="pill pill-gray">자금집행 완료일 기준</span>
+          </div>
         </div>
         <div class="card-body" id="jiphaeng-history-wrap" style="overflow-x:auto"></div>
       </div>
@@ -5127,9 +5137,14 @@ function renderJiphaengHistory() {
   const wrap = $("jiphaeng-history-wrap");
   if (!wrap) return;
 
-  const data = STATE.jiphaengHistory;
+  // 연도 필터
+  const yearFilter = $("jiphaeng-year-filter")?.value || "";
+  const data = yearFilter
+    ? STATE.jiphaengHistory.filter(r => r.month.startsWith(yearFilter))
+    : STATE.jiphaengHistory;
+
   if (!data.length) {
-    wrap.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
+    wrap.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "해당 연도 데이터 없음"}</div>`;
     return;
   }
 
