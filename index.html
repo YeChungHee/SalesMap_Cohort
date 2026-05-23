@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.7.8</title>
+<title>플로우페이 코호트 대시보드 v2.7.9</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -775,6 +775,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.7.9",
+    date: "2026-05-23",
+    label: "SalesMap API 커서 페이지네이션 — 주간 활동 데이터 0건 근본 수정",
+    items: [
+      { type:"fix", text:"salesmapGetAllNotes(): limit=500 무시 문제 → 커서 페이지네이션(최대 40페이지×100건)" },
+      { type:"fix", text:"salesmapGetAllTasks(): limit=500 무시 문제 → 커서 페이지네이션(최대 40페이지×100건)" },
+      { type:"fix", text:"salesmapGetAllActivities(): limit=500 무시 문제 → 딜·리드 각각 커서 페이지네이션" },
+      { type:"fix", text:"SalesMap API가 항상 50건(최고령 순) 반환 → cursor/nextCursor/cursorId 기반 전체 페이지 수집" }
+    ]
+  },
   {
     version: "2.7.8",
     date: "2026-05-23",
@@ -3222,18 +3233,33 @@ function renderWeeklyCohort(data) {
 }
 
 // ══════════════════════════════════════════════
-//  주간 보고서 — Task D: Activity API
+//  주간 보고서 — Task D: Activity API (커서 페이지네이션)
 // ══════════════════════════════════════════════
-// 딜+리드 액티비티 병렬 조회 (cursor 페이지네이션)
-async function salesmapGetAllActivities() {
+// 딜+리드 액티비티 커서 페이지네이션 조회 (최대 40페이지 × 100건 = 4000건)
+async function salesmapGetAllActivities(maxPages = 40) {
+  async function fetchActivityPages(endpoint, listKey) {
+    const all = [];
+    let cursor = null;
+    for (let i = 0; i < maxPages; i++) {
+      const qs = cursor ? `?limit=100&cursor=${encodeURIComponent(cursor)}` : '?limit=100';
+      let data;
+      try { data = await salesmapGet(endpoint + qs); } catch(e) { break; }
+      const list = data?.data?.[listKey] || data?.data?.activityList || data?.data?.items || [];
+      if (!list.length) break;
+      all.push(...list);
+      cursor = data?.data?.nextCursor || data?.nextCursor
+             || list[list.length - 1]?.cursorId || null;
+      if (!cursor) break;
+    }
+    return all;
+  }
   try {
-    const [dealData, leadData] = await Promise.all([
-      salesmapGet('/v2/deal/activity?limit=500&sort=createdAt&order=desc').catch(() => null),
-      salesmapGet('/v2/lead/activity?limit=500&sort=createdAt&order=desc').catch(() => null)
+    const [dealActs, leadActs] = await Promise.all([
+      fetchActivityPages('/v2/deal/activity', 'dealActivityList'),
+      fetchActivityPages('/v2/lead/activity', 'leadActivityList')
     ]);
-    const dealList = dealData?.data?.dealActivityList || dealData?.data?.activityList || dealData?.data?.items || [];
-    const leadList = leadData?.data?.leadActivityList || leadData?.data?.activityList || leadData?.data?.items || [];
-    const combined = [...dealList, ...leadList];
+    const combined = [...dealActs, ...leadActs];
+    console.log(`[activityLoad] deal:${dealActs.length} lead:${leadActs.length} total:${combined.length}`);
     return combined.length > 0 ? combined : null;
   } catch(e) {
     console.warn('activity API unavailable', e);
@@ -3241,36 +3267,42 @@ async function salesmapGetAllActivities() {
   }
 }
 
-// 노트 목록 조회 — /v2/memo (최신 순, 최대 500건)
-async function salesmapGetAllNotes() {
-  try {
-    const data = await salesmapGet('/v2/memo?limit=500&sort=createdAt&order=desc');
+// 노트 목록 커서 페이지네이션 조회 — /v2/memo (최대 40페이지 × 100건 = 4000건)
+async function salesmapGetAllNotes(maxPages = 40) {
+  const allItems = [];
+  let cursor = null;
+  for (let i = 0; i < maxPages; i++) {
+    const qs = cursor ? `?limit=100&cursor=${encodeURIComponent(cursor)}` : '?limit=100';
+    let data;
+    try { data = await salesmapGet(`/v2/memo${qs}`); } catch(e) { break; }
     const list = data?.data?.memoList || data?.items || data?.data?.items || [];
-    if (list.length > 0) return list;
-    // fallback: 정렬 파라미터 미지원 시 기본 호출
-    const data2 = await salesmapGet('/v2/memo?limit=500');
-    const list2 = data2?.data?.memoList || data2?.items || data2?.data?.items || [];
-    return list2.length > 0 ? list2 : null;
-  } catch(e) {
-    console.warn('memo API unavailable', e);
-    return null;
+    if (!list.length) break;
+    allItems.push(...list);
+    cursor = data?.data?.nextCursor || data?.nextCursor
+           || list[list.length - 1]?.cursorId || null;
+    if (!cursor) break;
   }
+  console.log(`[memoLoad] pages fetched, total:${allItems.length}`);
+  return allItems.length > 0 ? allItems : null;
 }
 
-// TODO 목록 조회 — /v2/todo (최신 순, 최대 500건)
-async function salesmapGetAllTasks() {
-  try {
-    const data = await salesmapGet('/v2/todo?limit=500&sort=시작일&order=desc');
+// TODO 목록 커서 페이지네이션 조회 — /v2/todo (최대 40페이지 × 100건 = 4000건)
+async function salesmapGetAllTasks(maxPages = 40) {
+  const allItems = [];
+  let cursor = null;
+  for (let i = 0; i < maxPages; i++) {
+    const qs = cursor ? `?limit=100&cursor=${encodeURIComponent(cursor)}` : '?limit=100';
+    let data;
+    try { data = await salesmapGet(`/v2/todo${qs}`); } catch(e) { break; }
     const list = data?.data?.todoList || data?.items || data?.data?.items || [];
-    if (list.length > 0) return list;
-    // fallback: 정렬 파라미터 미지원 시 기본 호출
-    const data2 = await salesmapGet('/v2/todo?limit=500');
-    const list2 = data2?.data?.todoList || data2?.items || data2?.data?.items || [];
-    return list2.length > 0 ? list2 : null;
-  } catch(e) {
-    console.warn('todo API unavailable', e);
-    return null;
+    if (!list.length) break;
+    allItems.push(...list);
+    cursor = data?.data?.nextCursor || data?.nextCursor
+           || list[list.length - 1]?.cursorId || null;
+    if (!cursor) break;
   }
+  console.log(`[todoLoad] pages fetched, total:${allItems.length}`);
+  return allItems.length > 0 ? allItems : null;
 }
 
 function computeWeeklyActivity(activities, notes, tasks) {
