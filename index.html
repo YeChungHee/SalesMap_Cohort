@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.8.7</title>
+<title>플로우페이 코호트 대시보드 v2.8.8</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -789,6 +789,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.8.8",
+    date: "2026-05-23",
+    label: "히트맵 3컬럼 확장 (히트율·해당 업체) + 날짜 폴백 수정",
+    items: [
+      { type:"feat", text:"renderHeatmap: 월 | 히트율 | 해당 업체 3컬럼 테이블 — 성사 업체명 배지 표시" },
+      { type:"fix",  text:"monthlyMap 날짜 폴백: 거래일·자금집행일·자금집행 완료일 추가 → 0.0% 버그 수정" },
+      { type:"feat", text:"dealItems[] 배열: wonStages 성사 딜의 업체명 수집 후 중복 제거 표시" }
+    ]
+  },
   {
     version: "2.8.7",
     date: "2026-05-23",
@@ -2401,46 +2411,60 @@ function renderHeatmap() {
     if (el) el.innerHTML = `<div style="text-align:center;padding:32px;color:var(--fg-4)">${STATE.dataLoading ? "로딩 중…" : "데이터 없음"}</div>`;
     return;
   }
-  // 실데이터: monthlyCohort rows have { month, input, leads, deals, paid }
-  // Build dynamic source list from first row keys
-  const firstRow = STATE.monthlyCohort[0] || {};
-  const sourceKeys = Object.keys(firstRow).filter(k => k !== "month" && !["input","leads","deals","paid","retention","reactivated"].includes(k));
 
-  // If source-keyed heatmap data exists, use it; otherwise show monthly deal conversion rate
-  const hasSrcData = sourceKeys.length > 0;
-  const sources = hasSrcData
-    ? sourceKeys.map(k => ({ key:k, label:k }))
-    : [{ key:"_all", label:"전체" }];
+  // 헤더: 월 | 히트율 | 해당 업체
+  let html = `
+  <table style="border-collapse:collapse;width:100%">
+    <thead>
+      <tr style="border-bottom:1px solid var(--line-1)">
+        <th style="text-align:left;font-size:12px;color:var(--fg-4);padding:8px 12px;font-weight:600;width:90px">월</th>
+        <th style="text-align:center;font-size:12px;color:var(--fg-4);padding:8px 12px;font-weight:600;width:110px">히트율</th>
+        <th style="text-align:left;font-size:12px;color:var(--fg-4);padding:8px 12px;font-weight:600">해당 업체</th>
+      </tr>
+    </thead>
+    <tbody>`;
 
-  let html = `<table style="border-collapse:separate;border-spacing:4px"><thead><tr><th style="text-align:left;font-size:12px;color:var(--muted);padding:4px 8px">월</th>`;
-  sources.forEach(s => { html += `<th style="font-size:12px;color:var(--muted);padding:4px 10px">${s.label}</th>`; });
-  html += `</tr></thead><tbody>`;
+  STATE.monthlyCohort.forEach((row, i) => {
+    const rate = row.input ? (row.deals / row.input * 100) : 0;
+    const [bg, tc] = rate > 22 ? ["#166534","#fff"]
+      : rate > 16 ? ["#16a34a","#fff"]
+      : rate > 10 ? ["#86efac","#166534"]
+      : rate > 5  ? ["#fde68a","#92400e"]
+      : ["#fee2e2","#991b1b"];
 
-  STATE.monthlyCohort.forEach(row => {
-    html += `<tr><td style="font-size:12px;color:var(--muted);padding:4px 8px;white-space:nowrap">${row.month}</td>`;
-    sources.forEach(s => {
-      let rate = 0;
-      if (s.key === "_all") {
-        rate = row.input ? (row.deals / row.input * 100) : 0;
-      } else {
-        const arr = row[s.key];
-        if (!arr) { html += `<td></td>`; return; }
-        const [input,,deals] = Array.isArray(arr) ? arr : [arr.input, arr.leads, arr.deals];
-        rate = input ? (deals/input*100) : 0;
-      }
-      const [bg, tc] = rate > 22 ? ["#166534","#fff"] : rate > 16 ? ["#16a34a","#fff"] : rate > 10 ? ["#86efac","#166534"] : rate > 5 ? ["#fde68a","#92400e"] : ["#fee2e2","#991b1b"];
-      html += `<td><div class="heatmap-cell" style="width:72px;height:36px;background:${bg};color:${tc}" title="${row.month} ${s.label}: ${rate.toFixed(1)}%">${rate.toFixed(1)}%</div></td>`;
-    });
-    html += `</tr>`;
+    // 업체 목록: dealItems 배열 (중복 제거)
+    const items = row.dealItems || [];
+    const unique = [...new Set(items)];
+    const companyHtml = unique.length
+      ? unique.map(n =>
+          `<span style="display:inline-block;background:var(--bg-3);border:1px solid var(--line-1);border-radius:4px;padding:2px 7px;font-size:11px;color:var(--fg-2);margin:2px 3px 2px 0">${n}</span>`
+        ).join("")
+      : `<span style="color:var(--fg-4);font-size:12px;font-style:italic">—</span>`;
+
+    const rowBg = i % 2 === 0 ? "" : "background:var(--bg-2)";
+    html += `
+      <tr style="border-bottom:1px solid var(--line-1);${rowBg}">
+        <td style="padding:10px 12px;font-size:13px;color:var(--fg-3);font-weight:600;white-space:nowrap">${row.month}</td>
+        <td style="padding:10px 12px;text-align:center">
+          <div class="heatmap-cell" style="width:80px;height:32px;background:${bg};color:${tc};border-radius:6px;margin:auto"
+               title="${row.month}: 진입 ${row.input}건 중 ${row.deals}건 성사 (${rate.toFixed(1)}%)">
+            ${rate.toFixed(1)}%
+          </div>
+        </td>
+        <td style="padding:10px 12px;line-height:1.6">${companyHtml}</td>
+      </tr>`;
   });
+
   html += `</tbody></table>`;
-  html += `<div style="margin-top:12px;display:flex;gap:12px;font-size:11px;color:var(--muted)">
-    <span>■ <span style="color:#166534">22%+</span></span>
-    <span>■ <span style="color:#16a34a">16%+</span></span>
-    <span>■ <span style="color:#92400e">10%+</span></span>
-    <span>■ <span style="color:#d97706">5%+</span></span>
-    <span>■ <span style="color:#dc2626">~5%</span></span>
+  html += `<div style="margin-top:14px;display:flex;gap:14px;font-size:11px;color:var(--fg-4);align-items:center">
+    <span style="font-weight:600">히트율 기준:</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#166534;border-radius:2px;vertical-align:middle;margin-right:4px"></span>22%+</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;margin-right:4px"></span>16%+</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border-radius:2px;vertical-align:middle;margin-right:4px"></span>10%+</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#fde68a;border-radius:2px;vertical-align:middle;margin-right:4px"></span>5%+</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border-radius:2px;vertical-align:middle;margin-right:4px"></span>~5%</span>
   </div>`;
+
   $("heatmap-wrap").innerHTML = html;
 }
 
@@ -5349,15 +5373,24 @@ function computeFromDeals(deals, leads = []) {
       if (cur && cur === "자금집행 완료")  sourceMap[src].paid++;   // 자금집행 완료
     }
 
-    // 월별 집계 — 거래 준비 진입 날짜 기준 (없으면 createdAt 폴백)
+    // 월별 집계 — 거래 준비 진입 날짜 기준 (폴백 체인: 거래일 → 자금집행일 → createdAt → 생성일)
     const entryKey = `거래 준비(세일즈 파이프라인)로 진입한 날짜`;
-    const entryRaw = deal[entryKey] || deal["createdAt"] || deal["created_at"] || deal["생성일"] || deal["생성 일"] || null;
+    const entryRaw = deal[entryKey]
+      || deal["거래일"] || deal["자금집행일"] || deal["자금집행 완료일"]
+      || deal["createdAt"] || deal["created_at"] || deal["생성일"] || deal["생성 일"] || null;
     if (entryRaw) {
       const month = String(entryRaw).slice(0, 7);
       if (/^\d{4}-\d{2}/.test(month)) {  // YYYY-MM 형식 유효성 검사
-        if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0 };
+        if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0, dealItems:[] };
         monthlyMap[month].input++;
-        if (cur && wonStages.includes(cur)) monthlyMap[month].deals++;
+        if (cur && wonStages.includes(cur)) {
+          monthlyMap[month].deals++;
+          // 업체명 수집: deal 직접 필드 → orgMap 조인
+          const oid = String(deal.organizationId || deal["회사 ID"] || deal["회사id"] || "");
+          const orgName = STATE.orgMap[oid]?.name
+            || deal.name || deal["이름"] || deal["회사명"] || deal["고객명"] || null;
+          if (orgName) monthlyMap[month].dealItems.push(orgName);
+        }
         if (cur && cur === "결제 완료")     monthlyMap[month].paid++;
       }
     }
