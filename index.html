@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.0</title>
+<title>플로우페이 코호트 대시보드 v2.10.1</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -861,6 +861,17 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.10.1",
+    date: "2026-05-23",
+    label: "히트맵 딜 전환율 계산 로직 변경 — 리드 유입 기준",
+    items: [
+      { type:"fix",  text:"딜 전환율 = 딜 파이프라인 진입 건 / 해당 월 리드 유입 건 (기존: 성사 ÷ 파이프라인 진입)" },
+      { type:"feat", text:"processData(): 리드 루프에서 월별 inflow 집계 추가 (lead.createdAt 기준)" },
+      { type:"feat", text:"renderHeatmap(): inflow=0 시 '유입 없음' 표시, 색상 임계값 50/30/15/5% 재조정" },
+      { type:"feat", text:"히트맵 범례에 계산 공식 명시 (딜 파이프라인 진입 ÷ 리드 유입)" }
+    ]
+  },
   {
     version: "2.10.0",
     date: "2026-05-23",
@@ -2557,14 +2568,18 @@ function renderHeatmap() {
     html += `<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--fg-4)">해당 연도 데이터 없음</td></tr>`;
   }
   cohort.forEach((row, i) => {
-    const rate = row.input ? (row.deals / row.input * 100) : 0;
-    const [bg, tc] = rate > 22 ? ["#166534","#fff"]
-      : rate > 16 ? ["#16a34a","#fff"]
-      : rate > 10 ? ["#86efac","#166534"]
+    // 딜 전환율 = 딜 파이프라인 진입 건 / 해당 월 유입 건 (리드 생성 기준)
+    const inflow = row.inflow || 0;
+    const rate = inflow ? (row.input / inflow * 100) : 0;
+    const hasData = inflow > 0;
+    const [bg, tc] = !hasData ? ["var(--bg-3)","var(--fg-4)"]
+      : rate > 50 ? ["#166534","#fff"]
+      : rate > 30 ? ["#16a34a","#fff"]
+      : rate > 15 ? ["#86efac","#166534"]
       : rate > 5  ? ["#fde68a","#92400e"]
       : ["#fee2e2","#991b1b"];
 
-    // 업체 목록: dealItems 배열 (중복 제거)
+    // 업체 목록: 딜 파이프라인 진입 업체 (중복 제거)
     const items = row.dealItems || [];
     const unique = [...new Set(items)];
     const companyHtml = unique.length
@@ -2573,14 +2588,19 @@ function renderHeatmap() {
         ).join("")
       : `<span style="color:var(--fg-4);font-size:12px;font-style:italic">—</span>`;
 
+    const rateLabel = !hasData ? "유입 없음" : `${rate.toFixed(1)}%`;
+    const tooltip = !hasData
+      ? `${row.month}: 리드 유입 0건`
+      : `${row.month}: 유입 ${inflow}건 → 딜 파이프라인 진입 ${row.input}건 (${rate.toFixed(1)}%)`;
+
     const rowBg = i % 2 === 0 ? "" : "background:var(--bg-2)";
     html += `
       <tr style="border-bottom:1px solid var(--line-1);${rowBg}">
         <td style="padding:10px 12px;font-size:13px;color:var(--fg-3);font-weight:600;white-space:nowrap">${row.month}</td>
         <td style="padding:10px 12px;text-align:center">
           <div class="heatmap-cell" style="width:80px;height:32px;background:${bg};color:${tc};border-radius:6px;margin:auto"
-               title="${row.month}: 진입 ${row.input}건 중 ${row.deals}건 성사 (${rate.toFixed(1)}%)">
-            ${rate.toFixed(1)}%
+               title="${tooltip}">
+            ${rateLabel}
           </div>
         </td>
         <td style="padding:10px 12px;line-height:1.6">${companyHtml}</td>
@@ -2588,11 +2608,11 @@ function renderHeatmap() {
   });
 
   html += `</tbody></table>`;
-  html += `<div style="margin-top:14px;display:flex;gap:14px;font-size:11px;color:var(--fg-4);align-items:center">
-    <span style="font-weight:600">딜 전환율 기준:</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#166534;border-radius:2px;vertical-align:middle;margin-right:4px"></span>22%+</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;margin-right:4px"></span>16%+</span>
-    <span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border-radius:2px;vertical-align:middle;margin-right:4px"></span>10%+</span>
+  html += `<div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:14px;font-size:11px;color:var(--fg-4);align-items:center">
+    <span style="font-weight:600">딜 전환율 = 딜 파이프라인 진입 ÷ 리드 유입:</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#166534;border-radius:2px;vertical-align:middle;margin-right:4px"></span>50%+</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;vertical-align:middle;margin-right:4px"></span>30%+</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border-radius:2px;vertical-align:middle;margin-right:4px"></span>15%+</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#fde68a;border-radius:2px;vertical-align:middle;margin-right:4px"></span>5%+</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border-radius:2px;vertical-align:middle;margin-right:4px"></span>~5%</span>
   </div>`;
@@ -5784,7 +5804,7 @@ function computeFromDeals(deals, leads = []) {
     if (entryRaw) {
       const month = String(entryRaw).slice(0, 7);
       if (/^\d{4}-\d{2}/.test(month)) {  // YYYY-MM 형식 유효성 검사
-        if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0, dealItems:[] };
+        if (!monthlyMap[month]) monthlyMap[month] = { input:0, leads:0, deals:0, paid:0, inflow:0, dealItems:[] };
         monthlyMap[month].input++;
         if (cur && wonStages.includes(cur)) {
           monthlyMap[month].deals++;
@@ -5822,6 +5842,17 @@ function computeFromDeals(deals, leads = []) {
     if (cur && sqlStages.includes(cur)) sqlLeads++;
     const lsrc = detectDealSource(lead);
     if (lsrc) leadsSourceMap[lsrc] = (leadsSourceMap[lsrc] || 0) + 1;
+
+    // 월별 유입 집계 — 리드 생성일 기준 (딜 전환율 분모)
+    const leadDate = lead.createdAt || lead["created_at"]
+      || lead["생성일"] || lead["생성 일"] || lead["등록일"] || null;
+    if (leadDate) {
+      const lMonth = String(leadDate).slice(0, 7);
+      if (/^\d{4}-\d{2}/.test(lMonth)) {
+        if (!monthlyMap[lMonth]) monthlyMap[lMonth] = { input:0, leads:0, deals:0, paid:0, inflow:0, dealItems:[] };
+        monthlyMap[lMonth].inflow++;
+      }
+    }
   }
   // fallback: leads not available, count from deals that have lead stage keys
   if (!leads.length) {
