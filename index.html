@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.5</title>
+<title>플로우페이 코호트 대시보드 v2.10.6</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -897,6 +897,16 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.10.6",
+    date: "2026-05-24",
+    label: "이용 고객 목록 건수 표시 + 배지 텍스트 수정",
+    items: [
+      { type:"feat", text:"computeActiveCustomers() — 업체별 단계 건수(counts) 집계 추가, companies에 count 필드 반환" },
+      { type:"feat", text:"이용 고객 목록 배지에 건수 병기: '자금집행 (N건)', '결제완료 (N건)'" },
+      { type:"fix",  text:"배지 텍스트 '결제 완료' → '결제완료', '결제 지연' → '결제지연' (띄어쓰기 제거)" }
+    ]
+  },
   {
     version: "2.10.5",
     date: "2026-05-24",
@@ -5471,14 +5481,15 @@ function computeActiveCustomers(deals) {
     const key = orgId || orgName;
     const pri = PRIORITY.indexOf(cur);
     if (!orgMap[key]) {
-      orgMap[key] = { name: orgName, type: cur, priority: pri };
+      orgMap[key] = { name: orgName, type: cur, priority: pri, counts: {} };
     } else if (pri < orgMap[key].priority) {
       orgMap[key].type = cur;
       orgMap[key].priority = pri;
     }
+    orgMap[key].counts[cur] = (orgMap[key].counts[cur] || 0) + 1;
   }
   const companies = Object.values(orgMap)
-    .map(o => ({ name: o.name, type: o.type }))
+    .map(o => ({ name: o.name, type: o.type, count: o.counts[o.type] || 1 }))
     .sort((a, b) => {
       const pa = PRIORITY.indexOf(a.type), pb = PRIORITY.indexOf(b.type);
       if (pa !== pb) return pa - pb;
@@ -6600,8 +6611,8 @@ function showActiveCustomersModal() {
   if (!ac) return;
   const BADGE = {
     "자금집행 완료": ["badge-jiphaeng", "자금집행"],
-    "결제 완료":     ["badge-paid",     "결제 완료"],
-    "결제 지연":     ["badge-delay",    "결제 지연"],
+    "결제 완료":     ["badge-paid",     "결제완료"],
+    "결제 지연":     ["badge-delay",    "결제지연"],
   };
   const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
   $("acm-meta-bar").textContent = `총 ${ac.count}개사 · 자금집행 완료 + 결제 완료 기준${periodLabel}`;
@@ -6611,7 +6622,7 @@ function showActiveCustomersModal() {
         const safeName = c.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         return `<div class="acm-item">
           <span class="acm-name">${safeName}</span>
-          <span class="acm-badge ${cls}">${txt}</span>
+          <span class="acm-badge ${cls}">${txt} (${c.count}건)</span>
         </div>`;
       }).join("")
     : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 이용 고객 없음</div>`;
