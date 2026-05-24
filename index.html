@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.4</title>
+<title>플로우페이 코호트 대시보드 v2.10.5</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -897,6 +897,18 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.10.5",
+    date: "2026-05-24",
+    label: "파이프라인 KPI 단계 분류 재정의 + 검증 버그 3건 수정",
+    items: [
+      { type:"fix",  text:"역할 배지 'undefined 운영' → cfg.icon + cfg.label (innerHTML 렌더)" },
+      { type:"fix",  text:"wonStages cat:성사→완료 재정의 — 성사=자금집행 완료, 딜 완료=결제 완료로 분리" },
+      { type:"fix",  text:"pipelineMetrics에 completedDeals(딜 완료) 추가, activeDeals = total-won-completed-lost로 수정" },
+      { type:"fix",  text:"KPI '결제 완료' 카드 → '딜 완료', 값=completedDeals, sub=성사 대비 %로 변경" },
+      { type:"fix",  text:"히트맵 결측 셀: 실데이터 모드에서 데이터 없는 셀은 회색 '–' 표시 (mock 차단)" }
+    ]
+  },
   {
     version: "2.10.4",
     date: "2026-05-24",
@@ -2189,7 +2201,7 @@ function renderKPI() {
     const loading = STATE.dataLoading;
     $("kpi-grid").innerHTML = Array(6).fill(0).map((_, i) => `
       <div class="card kpi">
-        <div class="kpi-label">${["총 유입","리드 전환","딜 성사","결제 완료","평균 사이클","이용 고객"][i]}</div>
+        <div class="kpi-label">${["총 유입","리드 전환","딜 성사","딜 완료","평균 사이클","이용 고객"][i]}</div>
         <div class="kpi-value" style="color:var(--fg-4)">${loading ? "…" : "–"}</div>
         <div class="kpi-sub" style="color:var(--fg-4)">${loading ? "로딩 중" : "데이터 없음"}</div>
       </div>`).join("");
@@ -2202,8 +2214,8 @@ function renderKPI() {
   const cards = [
     { label:"총 유입",        value: t.input ? fmt(t.input) : (pm?.totalDeals ? fmt(pm.totalDeals) : "–"), sub:"이번 기간 누적" },
     { label:"리드 전환",       value: t.leads ? fmt(t.leads) : "–",  sub:`전환율 ${t.input ? pct(t.leads,t.input) : "–"}` },
-    { label:"딜 성사",         value: pm ? fmt(pm.wonDeals)  : (t.deals ? fmt(t.deals) : "–"), sub: pm ? `성사율 ${pm.totalDeals ? (pm.wonDeals/pm.totalDeals*100).toFixed(1) : 0}%` : `유입 대비 ${dealRate}%` },
-    { label:"결제 완료",       value: pm ? fmt(pm.paidDeals ?? pm.wonDeals) : (t.paid ? fmt(t.paid) : "–"), sub: pm ? "결제 완료 누적" : `딜 대비 ${payRate}%` },
+    { label:"딜 성사",  value: pm ? fmt(pm.wonDeals)       : (t.deals ? fmt(t.deals) : "–"), sub: pm ? `성사율 ${pm.totalDeals ? (pm.wonDeals/pm.totalDeals*100).toFixed(1) : 0}%` : `유입 대비 ${dealRate}%` },
+    { label:"딜 완료",  value: pm ? fmt(pm.completedDeals ?? 0) : (t.paid ? fmt(t.paid) : "–"), sub: pm ? `성사 대비 ${pm.wonDeals ? (( pm.completedDeals ?? 0)/pm.wonDeals*100).toFixed(1) : 0}%` : `딜 대비 ${payRate}%` },
     { label:"평균 영업 사이클", value: avgCycle !== "–" ? `${avgCycle}일` : "–", sub:"성사 딜 P50 기준" }
   ];
   const regularCards = cards.map(c => `
@@ -3707,7 +3719,7 @@ function renderRoleBadge() {
     if (ctrl) ctrl.insertAdjacentElement("afterbegin", badge);
   }
   badge.className = `role-badge ${cfg.cls}`;
-  badge.textContent = `${cfg.emoji} ${cfg.label}`;
+  badge.innerHTML = `${cfg.icon} ${cfg.label}`;
 
   // 갱신 버튼 활성/비활성
   const refreshBtn = $("btn-refresh");
@@ -5945,13 +5957,14 @@ function computeFromDeals(deals, leads = []) {
   const salesMap = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
   const leadMap  = Object.fromEntries(mapping.filter(m => m.pipe === "리드" ).map(m => [m.stage, m]));
 
-  const wonStages  = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
+  // 성사 = 자금집행 완료(cat:"완료"), 딜 완료 = 결제 완료(cat:"성사")
+  const wonStages  = Object.values(salesMap).filter(m => m.cat === "완료").map(m => m.stage);
   const lostStages = Object.values(salesMap).filter(m => m.cat === "실패").map(m => m.stage);
   const sqlStages  = Object.values(leadMap ).filter(m => m.cat === "종료" && m.include).map(m => m.stage);
 
   // 단계별 현재 카운트 (세일즈 파이프라인)
   const stageCounts = {};
-  const dealWonCycleSec = [];       // 성사 딜 전체 체류 합산 (영업 사이클)
+  const dealWonCycleSec = [];       // 성사(자금집행 완료) 딜 영업 사이클
   const dealWonCycleSecBySource = {}; // 소스별 체류 합산
   const monthlyMap = {};            // YYYY-MM → { input, leads, deals, paid }
   const sourceMap  = {};            // source → { input, deals, paid, new_, repeat }
@@ -5968,7 +5981,7 @@ function computeFromDeals(deals, leads = []) {
       sourceMap[src].input++;                                        // 파이프라인 진입 딜 전체 (→ 딜 전환)
       if (purchaseType === "Repeat") sourceMap[src].repeat++;
       else sourceMap[src].new_++; // null(넘버링 없음) → 신규로 처리
-      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;  // 성사 딜 (내부용)
+      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;  // 성사(자금집행 완료)
       if (cur && cur === "자금집행 완료")  sourceMap[src].paid++;   // 자금집행 완료
     }
 
@@ -5994,7 +6007,7 @@ function computeFromDeals(deals, leads = []) {
       }
     }
 
-    // 성사 딜 영업 사이클 (누적 체류 합산)
+    // 영업 사이클: 자금집행 완료(성사) 시점까지
     if (cur && wonStages.includes(cur)) {
       const dwells = parseStageDwells(deal, "세일즈 파이프라인");
       const totalSec = Object.values(dwells).reduce((s, d) => s + (d.dwellSec || 0), 0);
@@ -6072,9 +6085,11 @@ function recomputeForPeriod(deals, leads = []) {
   const salesMap = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
   const leadMap  = Object.fromEntries(mapping.filter(m => m.pipe === "리드" ).map(m => [m.stage, m]));
 
-  const wonStages  = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
-  const lostStages = Object.values(salesMap).filter(m => m.cat === "실패").map(m => m.stage);
-  const sqlStages  = Object.values(leadMap ).filter(m => m.cat === "종료" && m.include).map(m => m.stage);
+  // 성사 = 자금집행 완료(cat:"완료"), 딜 완료 = 결제 완료(cat:"성사")
+  const wonStages       = Object.values(salesMap).filter(m => m.cat === "완료").map(m => m.stage);
+  const completedStages = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
+  const lostStages      = Object.values(salesMap).filter(m => m.cat === "실패").map(m => m.stage);
+  const sqlStages       = Object.values(leadMap ).filter(m => m.cat === "종료" && m.include).map(m => m.stage);
 
   const stageCounts = {};
   const dealWonCycleSec = [];
@@ -6092,10 +6107,11 @@ function recomputeForPeriod(deals, leads = []) {
       sourceMap[src].input++;
       if (purchaseType === "Repeat") sourceMap[src].repeat++;
       else sourceMap[src].new_++;
-      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;
+      if (cur && wonStages.includes(cur))  sourceMap[src].deals++;   // 성사(자금집행 완료)
       if (cur && cur === "자금집행 완료")  sourceMap[src].paid++;
     }
 
+    // 영업 사이클: 자금집행 완료(성사) 시점까지
     if (cur && wonStages.includes(cur)) {
       const dwells = parseStageDwells(deal, "세일즈 파이프라인");
       const totalSec = Object.values(dwells).reduce((s, d) => s + (d.dwellSec || 0), 0);
@@ -6127,14 +6143,15 @@ function recomputeForPeriod(deals, leads = []) {
     }
   }
 
-  const totalDeals  = deals.length;
-  const wonDeals    = wonStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
-  const lostDeals   = lostStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
-  const activeDeals = totalDeals - wonDeals - lostDeals;
-  const avgCycleP50 = dealWonCycleSec.length
+  const totalDeals     = deals.length;
+  const wonDeals       = wonStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);       // 성사: 자금집행 완료
+  const completedDeals = completedStages.reduce((s, st) => s + (stageCounts[st] || 0), 0); // 딜 완료: 결제 완료
+  const lostDeals      = lostStages.reduce((s, st) => s + (stageCounts[st] || 0), 0);
+  const activeDeals    = totalDeals - wonDeals - completedDeals - lostDeals;                // 순수 진행 중
+  const avgCycleP50    = dealWonCycleSec.length
     ? +(percentileOf(dealWonCycleSec, 50) / 86400).toFixed(1) : null;
 
-  STATE.pipelineMetrics = { totalDeals, wonDeals, lostDeals, activeDeals,
+  STATE.pipelineMetrics = { totalDeals, wonDeals, completedDeals, lostDeals, activeDeals,
     totalLeads: totalLeads || null, sqlLeads: sqlLeads || null, avgCycleP50 };
 
   STATE.funnelData = computeFunnelData(deals, STATE.funnelPeriodType, STATE.funnelPeriodValue);
@@ -6523,17 +6540,24 @@ function renderDwellHeatmap(useMock = false) {
     for (const month of months) {
       let p50h;
       if (dwellMap?.[stage]?.[month]?.length) {
+        // 실데이터 정상 셀
         p50h = +(percentileOf(dwellMap[stage][month], 50) / 3600).toFixed(1);
+        const [bg, tc] = cellColor(p50h, thresh);
+        html += `<td><div class="heatmap-cell" style="width:64px;height:32px;background:${bg};color:${tc}"
+          title="${stage} ${month}: P50 ${fmtDwell(p50h)} (임계 ${fmtDwell(thresh)})">${fmtDwell(p50h)}</div></td>`;
+      } else if (dwellMap) {
+        // 실데이터 모드이나 해당 셀 결측 → "–" 표시
+        html += `<td><div class="heatmap-cell" style="width:64px;height:32px;background:#f1f5f9;color:#94a3b8"
+          title="${stage} ${month}: 데이터 없음">–</div></td>`;
       } else {
-        // 목업: 기준값에 ±20% 노이즈
+        // 데모 모드 mock 값
         const base = MOCK_BASE[stage] ?? 48;
         const seed = (stage.charCodeAt(0) + month.charCodeAt(5)) % 7;
         p50h = +(base * (0.8 + seed * 0.06)).toFixed(1);
+        const [bg, tc] = cellColor(p50h, thresh);
+        html += `<td><div class="heatmap-cell" style="width:64px;height:32px;background:${bg};color:${tc}"
+          title="${stage} ${month}: P50 ${fmtDwell(p50h)} (임계 ${fmtDwell(thresh)})">${fmtDwell(p50h)}</div></td>`;
       }
-      const [bg, tc] = cellColor(p50h, thresh);
-      const label = fmtDwell(p50h);
-      html += `<td><div class="heatmap-cell" style="width:64px;height:32px;background:${bg};color:${tc}"
-        title="${stage} ${month}: P50 ${fmtDwell(p50h)} (임계 ${fmtDwell(thresh)})">${label}</div></td>`;
     }
     html += `</tr>`;
   }
