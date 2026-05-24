@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.6</title>
+<title>플로우페이 코호트 대시보드 v2.10.7</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -5479,19 +5479,24 @@ function computeActiveCustomers(deals) {
                   || deal["company"] || (orgId && STATE.orgMap[orgId]?.name)
                   || orgId || "미상";
     const key = orgId || orgName;
-    const pri = PRIORITY.indexOf(cur);
     if (!orgMap[key]) {
-      orgMap[key] = { name: orgName, type: cur, priority: pri, counts: {} };
-    } else if (pri < orgMap[key].priority) {
-      orgMap[key].type = cur;
-      orgMap[key].priority = pri;
+      orgMap[key] = { name: orgName, counts: {} };
     }
+    // 모든 PAID_STAGES 건수를 누적 저장 (멀티 배지용)
     orgMap[key].counts[cur] = (orgMap[key].counts[cur] || 0) + 1;
   }
   const companies = Object.values(orgMap)
-    .map(o => ({ name: o.name, type: o.type, count: o.counts[o.type] || 1 }))
+    .map(o => {
+      // PRIORITY 순서대로 존재하는 단계만 stages 배열로 구성
+      const stages = PRIORITY
+        .filter(t => o.counts[t])
+        .map(t => ({ type: t, count: o.counts[t] }));
+      return { name: o.name, stages };
+    })
     .sort((a, b) => {
-      const pa = PRIORITY.indexOf(a.type), pb = PRIORITY.indexOf(b.type);
+      // 최상위 우선순위 단계 기준으로 정렬
+      const pa = a.stages.length ? PRIORITY.indexOf(a.stages[0].type) : 99;
+      const pb = b.stages.length ? PRIORITY.indexOf(b.stages[0].type) : 99;
       if (pa !== pb) return pa - pb;
       return a.name.localeCompare(b.name, "ko");
     });
@@ -6618,11 +6623,15 @@ function showActiveCustomersModal() {
   $("acm-meta-bar").textContent = `총 ${ac.count}개사 · 자금집행 완료 + 결제 완료 기준${periodLabel}`;
   $("acm-list").innerHTML = ac.companies.length
     ? ac.companies.map(c => {
-        const [cls, txt] = BADGE[c.type] || ["badge-paid", c.type];
         const safeName = c.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // stages 배열 순서대로 배지를 모두 렌더 (멀티 배지 지원)
+        const badgeHtml = (c.stages || []).map(s => {
+          const [cls, txt] = BADGE[s.type] || ["badge-paid", s.type];
+          return `<span class="acm-badge ${cls}">${txt} (${s.count}건)</span>`;
+        }).join("");
         return `<div class="acm-item">
           <span class="acm-name">${safeName}</span>
-          <span class="acm-badge ${cls}">${txt} (${c.count}건)</span>
+          ${badgeHtml}
         </div>`;
       }).join("")
     : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 이용 고객 없음</div>`;
