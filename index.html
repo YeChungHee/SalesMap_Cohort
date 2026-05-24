@@ -6531,7 +6531,7 @@ function renderDwellHeatmap(useMock = false) {
   html += `</tr></thead><tbody>`;
 
   // 표시명 재정의 — Salesmap 내부 단계명 → 대시보드 표시명
-  const STAGE_LABEL = { "결제 완료": "딜 완료" };
+  const STAGE_LABEL = {}; // 단계 표시명: mapping label 그대로 사용
 
   for (const stage of stageOrder) {
     const displayStage = STAGE_LABEL[stage] || stage;
