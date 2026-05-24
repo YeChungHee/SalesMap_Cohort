@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.7</title>
+<title>플로우페이 코호트 대시보드 v2.10.8</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -213,7 +213,7 @@ tbody tr:hover td{background:var(--primary-50)}
   display:none;align-items:flex-start;justify-content:flex-end}
 #active-customers-overlay.open{display:flex}
 #active-customers-panel{
-  width:360px;max-width:95vw;height:100vh;background:var(--bg-1,#ffffff);
+  width:396px;max-width:95vw;height:100vh;background:var(--bg-1,#ffffff);
   border-left:1px solid var(--line-1);box-shadow:var(--shadow-lg);
   display:flex;flex-direction:column;animation:slideInRight .22s ease}
 @keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}
@@ -228,14 +228,28 @@ tbody tr:hover td{background:var(--primary-50)}
 #active-customers-panel .acm-meta{
   padding:12px 20px;background:var(--bg-1);border-bottom:1px solid var(--line-1);
   font-size:12px;color:var(--fg-4);flex-shrink:0}
-#active-customers-panel .acm-list{flex:1;overflow-y:auto;padding:8px 0}
+/* 컬럼 헤더 */
+#active-customers-panel .acm-col-header{
+  display:grid;grid-template-columns:1fr 90px 90px;
+  padding:6px 20px;background:var(--bg-2,#f8fafc);
+  border-bottom:1px solid var(--line-1);flex-shrink:0}
+#active-customers-panel .acm-col-header span{
+  font-size:11px;font-weight:600;color:var(--fg-4,#94a3b8);text-transform:uppercase;letter-spacing:.04em}
+#active-customers-panel .acm-col-header .col-jiphaeng{text-align:center}
+#active-customers-panel .acm-col-header .col-paid{text-align:right}
+#active-customers-panel .acm-list{flex:1;overflow-y:auto;padding:4px 0}
+/* 3컬럼 행: 업체명 | 자금집행(중앙) | 결제완료/결제지연(우측) */
 #active-customers-panel .acm-item{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:10px 20px;border-bottom:1px solid var(--line-2)}
+  display:grid;grid-template-columns:1fr 90px 90px;align-items:center;
+  padding:9px 20px;border-bottom:1px solid var(--line-2)}
 #active-customers-panel .acm-item:last-child{border-bottom:none}
-#active-customers-panel .acm-name{font-size:13px;color:var(--fg-1);font-weight:500}
+#active-customers-panel .acm-name{
+  font-size:13px;color:var(--fg-1);font-weight:500;
+  text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#active-customers-panel .acm-col-jiphaeng{display:flex;justify-content:center}
+#active-customers-panel .acm-col-paid{display:flex;justify-content:flex-end}
 #active-customers-panel .acm-badge{
-  font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;flex-shrink:0}
+  font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;flex-shrink:0;white-space:nowrap}
 #active-customers-panel .badge-jiphaeng{background:#dcfce7;color:#15803d}
 #active-customers-panel .badge-paid{background:#dbeafe;color:#1d4ed8}
 #active-customers-panel .badge-delay{background:#fef9c3;color:#854d0e}
@@ -6621,17 +6635,22 @@ function showActiveCustomersModal() {
   };
   const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
   $("acm-meta-bar").textContent = `총 ${ac.count}개사 · 자금집행 완료 + 결제 완료 기준${periodLabel}`;
+  // 3컬럼 렌더: 업체명(좌) | 자금집행(중앙) | 결제완료/결제지연(우)
+  const stageMap = s => {
+    const [cls, txt] = BADGE[s.type] || ["badge-paid", s.type];
+    return `<span class="acm-badge ${cls}">${txt} (${s.count}건)</span>`;
+  };
   $("acm-list").innerHTML = ac.companies.length
     ? ac.companies.map(c => {
         const safeName = c.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-        // stages 배열 순서대로 배지를 모두 렌더 (멀티 배지 지원)
-        const badgeHtml = (c.stages || []).map(s => {
-          const [cls, txt] = BADGE[s.type] || ["badge-paid", s.type];
-          return `<span class="acm-badge ${cls}">${txt} (${s.count}건)</span>`;
-        }).join("");
+        const stages   = c.stages || [];
+        const jiphaeng = stages.find(s => s.type === "자금집행 완료");
+        const paidOrDelay = stages.find(s => s.type === "결제 완료") ||
+                            stages.find(s => s.type === "결제 지연");
         return `<div class="acm-item">
           <span class="acm-name">${safeName}</span>
-          ${badgeHtml}
+          <span class="acm-col-jiphaeng">${jiphaeng ? stageMap(jiphaeng) : ""}</span>
+          <span class="acm-col-paid">${paidOrDelay ? stageMap(paidOrDelay) : ""}</span>
         </div>`;
       }).join("")
     : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 이용 고객 없음</div>`;
@@ -6661,6 +6680,11 @@ loadRealData();
       </button>
     </div>
     <div class="acm-meta" id="acm-meta-bar">자금집행 완료 + 결제 완료 업체 (중복 제거)</div>
+    <div class="acm-col-header">
+      <span>업체명</span>
+      <span class="col-jiphaeng">자금집행</span>
+      <span class="col-paid">결제완료</span>
+    </div>
     <div class="acm-list" id="acm-list"></div>
   </div>
 </div>
