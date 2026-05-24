@@ -912,6 +912,25 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.10.8",
+    date: "2026-05-24",
+    label: "이용 고객 목록 3컬럼 레이아웃 + 패널 너비 확장",
+    items: [
+      { type:"feat", text:"패널 너비 360px → 396px (+10%)" },
+      { type:"feat", text:"acm-item 3컬럼 그리드: 업체명(좌) | 자금집행(중앙) | 결제완료/결제지연(중앙)" },
+      { type:"feat", text:"컬럼 헤더(업체명/자금집행/결제완료) 고정 표시" }
+    ]
+  },
+  {
+    version: "2.10.7",
+    date: "2026-05-24",
+    label: "이용 고객 멀티 배지 — 자금집행+결제완료 동시 보유사 복수 표시",
+    items: [
+      { type:"feat", text:"computeActiveCustomers() stages 배열 구조로 변경 — 모든 PAID_STAGES 건수 저장" },
+      { type:"feat", text:"showActiveCustomersModal() stages 순회 멀티 배지 렌더" }
+    ]
+  },
+  {
     version: "2.10.6",
     date: "2026-05-24",
     label: "이용 고객 목록 건수 표시 + 배지 텍스트 수정",
