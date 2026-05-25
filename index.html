@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>플로우페이 코호트 대시보드 v2.10.8</title>
+<title>플로우페이 코호트 대시보드 v2.11.0</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
@@ -124,6 +124,18 @@ select.ctrl:focus,input.ctrl:focus{outline:none;border-color:var(--primary-400)}
 .kpi-delta{font-size:12px;font-weight:700}
 .kpi-delta.up{color:var(--success-500)}
 .kpi-delta.down{color:var(--danger-500)}
+.kpi-basis{font-size:10px;color:var(--fg-5,#b0b8c4);margin-top:4px;padding-top:4px;border-top:1px solid var(--line-2)}
+/* ── KPI 2행 레이아웃 ── */
+.kpi-section-label{
+  font-size:10px;font-weight:700;color:var(--fg-4);letter-spacing:.07em;text-transform:uppercase;
+  display:flex;align-items:center;gap:6px;margin:10px 0 6px}
+.kpi-section-label::after{content:"";flex:1;height:1px;background:var(--line-2)}
+.kpi-row1{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.kpi-row2{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+@media(max-width:900px){
+  .kpi-row1{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .kpi-row2{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 
 /* ── 테이블 ── */
 .tw{overflow-x:auto}
@@ -329,7 +341,7 @@ tbody tr:hover td{background:var(--primary-50)}
 
     <!-- ══════ 대시보드 ══════ -->
     <div class="section active" id="view-overview">
-      <div class="g g6" id="kpi-grid" style="margin-bottom:16px"></div>
+      <div id="kpi-wrap" style="margin-bottom:16px"></div>
       <!-- 코호트 전환 현황 — 전체 너비 -->
       <div class="card">
         <div class="card-header">
@@ -911,6 +923,18 @@ tbody tr:hover td{background:var(--primary-50)}
 //  업데이트 히스토리
 // ══════════════════════════════════════════════
 const CHANGELOG = [
+  {
+    version: "2.11.0",
+    date: "2026-05-25",
+    label: "KPI 2행 레이아웃 — 유입 코호트(Row1) + 거래 현황(Row2)",
+    items: [
+      { type:"feat", text:"matchByDateField() 헬퍼 — 날짜 필드별 기간 필터 범용화" },
+      { type:"feat", text:"computeCohortKPI(period) — 유입일 기준 코호트: 총 유입·리드전환·딜전환·딜성사·이용고객(자금집행 완료 단계만)" },
+      { type:"feat", text:"computeActivityKPI(period) — 실거래일 기준: 딜성사(거래일)·딜완료(결제예정일)·평균사이클·거래고객" },
+      { type:"feat", text:"renderKPI() 2행 재편 — Row1 5카드(퍼널), Row2 4카드(활동), 카드 하단 날짜 기준 명시" },
+      { type:"feat", text:"이용 고객(Row1): 자금집행 완료 단계만 (결제 완료 제외)" }
+    ]
+  },
   {
     version: "2.10.8",
     date: "2026-05-24",
@@ -1793,6 +1817,18 @@ function getPeriodDateRange(period) {
   return null;
 }
 
+// 특정 날짜 필드 기준 기간 범위 판별 (가변 인자: 폴백 순서대로 전달)
+function matchByDateField(item, range, ...fields) {
+  if (!range) return true;
+  for (const f of fields) {
+    const raw = item[f];
+    if (!raw) continue;
+    const t = new Date(raw);
+    if (!isNaN(t) && t >= range.from && t <= range.to) return true;
+  }
+  return false;
+}
+
 // 딜이 기간 범위 내 파이프라인 진입 여부 판별 (폴백 체인)
 function dealMatchesPeriod(deal, range) {
   if (!range) return true;
@@ -2031,6 +2067,8 @@ const STATE = {
   regressions:     [],
   funnelData:        null,      // null = 미로드
   pipelineMetrics:   null,      // null = 미로드
+  cohortKPI:         null,      // Row 1: 유입일 기준 코호트 KPI
+  activityKPI:       null,      // Row 2: 실거래 일자 기준 활동 KPI
   activeCustomers:   null,      // 이용 고객 { count, companies:[{name,type}] }
   allDeals:          [],         // 전기간 원본 딜 목록 (덮어쓰기 금지 — 기간 필터 기준)
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
@@ -2236,46 +2274,92 @@ function svgBar(data, w, h, color) {
 //  렌더 함수들
 // ══════════════════════════════════════════════
 
-// KPI
+// KPI — 2행 레이아웃 (Row1: 유입 코호트, Row2: 거래 현황)
 function renderKPI() {
-  const t = cohortTotals();
-  const pm = STATE.pipelineMetrics;
-  if (!pm && !STATE.dataLoaded) {
-    const loading = STATE.dataLoading;
-    $("kpi-grid").innerHTML = Array(6).fill(0).map((_, i) => `
-      <div class="card kpi">
-        <div class="kpi-label">${["총 유입","리드 전환","딜 성사","딜 완료","평균 사이클","이용 고객"][i]}</div>
-        <div class="kpi-value" style="color:var(--fg-4)">${loading ? "…" : "–"}</div>
-        <div class="kpi-sub" style="color:var(--fg-4)">${loading ? "로딩 중" : "데이터 없음"}</div>
-      </div>`).join("");
+  const wrap = $("kpi-wrap");
+  if (!wrap) return;
+  const loading = STATE.dataLoading;
+  const loaded  = STATE.dataLoaded;
+
+  // 로딩 플레이스홀더
+  if (!loaded) {
+    const ph = v => `<div class="kpi-value" style="color:var(--fg-4)">${loading ? "…" : "–"}</div>`;
+    const mkCard = (lbl, basis) => `<div class="card kpi">
+      <div class="kpi-label">${lbl}</div>${ph()}
+      <div class="kpi-sub" style="color:var(--fg-4)">${loading ? "로딩 중" : "데이터 없음"}</div>
+      <div class="kpi-basis">${basis}</div></div>`;
+    wrap.innerHTML = `
+      <div class="kpi-section-label">유입 코호트 — 유입일 기준 전환 추적</div>
+      <div class="kpi-row1">
+        ${mkCard("총 유입","유입일 기준")}
+        ${mkCard("리드 전환","리드 생성일 기준")}
+        ${mkCard("딜 전환","딜 생성일 기준")}
+        ${mkCard("딜 성사","자금집행 완료 기준")}
+        ${mkCard("이용 고객","자금집행 완료 단계")}
+      </div>
+      <div class="kpi-section-label" style="margin-top:14px">거래 현황 — 실거래 일자 기준</div>
+      <div class="kpi-row2">
+        ${mkCard("딜 성사","거래일 기준")}
+        ${mkCard("딜 완료","결제(예정)일 기준")}
+        ${mkCard("평균 영업 사이클","유입→자금집행 P50")}
+        ${mkCard("거래 고객","거래일+결제예정일")}
+      </div>`;
     return;
   }
-  const dealRate = t.input ? (t.deals / t.input * 100).toFixed(1) : 0;
-  const payRate  = t.deals ? (t.paid  / t.deals * 100).toFixed(1) : 0;
-  const avgCycle = pm?.avgCycleP50 ?? "–";
+
+  const ck = STATE.cohortKPI  || {};
+  const ak = STATE.activityKPI || {};
   const ac = STATE.activeCustomers;
-  const cards = [
-    { label:"총 유입",        value: t.input ? fmt(t.input) : (pm?.totalDeals ? fmt(pm.totalDeals) : "–"), sub:"이번 기간 누적" },
-    { label:"리드 전환",       value: t.leads ? fmt(t.leads) : "–",  sub:`전환율 ${t.input ? pct(t.leads,t.input) : "–"}` },
-    { label:"딜 성사",  value: pm ? fmt(pm.wonDeals)       : (t.deals ? fmt(t.deals) : "–"), sub: pm ? `성사율 ${pm.totalDeals ? (pm.wonDeals/pm.totalDeals*100).toFixed(1) : 0}%` : `유입 대비 ${dealRate}%` },
-    { label:"딜 완료",  value: pm ? fmt(pm.completedDeals ?? 0) : (t.paid ? fmt(t.paid) : "–"), sub: pm ? `성사 대비 ${pm.wonDeals ? (( pm.completedDeals ?? 0)/pm.wonDeals*100).toFixed(1) : 0}%` : `딜 대비 ${payRate}%` },
-    { label:"평균 영업 사이클", value: avgCycle !== "–" ? `${avgCycle}일` : "–", sub:"성사 딜 P50 기준" }
+
+  // Row 1 — 유입 코호트
+  const inf  = ck.totalInflow    || 0;
+  const lc   = ck.leadConversion || 0;
+  const dc   = ck.dealConversion || 0;
+  const wc   = ck.wonCount       || 0;
+  const acCo = ck.activeCustomers|| 0;
+
+  const r1Cards = [
+    { label:"총 유입",     value: inf  ? fmt(inf)  : "–", sub:"이번 기간 유입 리드",  basis:"리드 생성일 기준" },
+    { label:"리드 전환",   value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 리드 파이프라인" },
+    { label:"딜 전환",     value: dc   ? fmt(dc)+"개사" : "–", sub:`리드 대비 ${lc ? pct(dc,lc) : "–"}`, basis:"유입 업체 → 딜 파이프라인" },
+    { label:"딜 성사",     value: wc   ? fmt(wc)   : "–", sub:`딜 대비 ${dc ? pct(wc,dc) : "–"}`,  basis:"유입 업체 → 자금집행 완료" },
+    { label:"이용 고객",   value: acCo ? acCo+"개사" : "–", sub:"자금집행 완료 단계", basis:"결제 완료 제외", accent:true },
   ];
-  const regularCards = cards.map(c => `
-    <div class="card kpi">
-      <div class="kpi-label">${c.label}</div>
-      <div class="kpi-value">${c.value}</div>
+
+  // Row 2 — 거래 현황
+  const wt  = ak.wonByTradeDate     || 0;
+  const cp  = ak.completedByPayDate || 0;
+  const cyc = ak.avgCycleP50;
+  const trd = ak.tradingCustomers   || 0;
+  const acAll = ac ? ac.count : 0;
+
+  const r2Cards = [
+    { label:"딜 성사",          value: wt  ? fmt(wt)  : "–", sub:"자금집행 완료 기준", basis:"거래일 기준" },
+    { label:"딜 완료",          value: cp  ? fmt(cp)  : "–", sub:"결제 완료 기준",    basis:"결제(예정)일 기준" },
+    { label:"평균 영업 사이클", value: cyc != null ? `${cyc}일` : "–", sub:"성사 딜 P50 기준", basis:"유입일 → 자금집행 완료일" },
+    { label:"거래 고객",        value: acAll ? acAll+"개사" : "–", sub:"자금집행+결제 완료", basis:"거래일+결제예정일", clickable:true },
+  ];
+
+  const mkCard = (c, extraClass="") => {
+    const accentStyle = c.accent ? "border-color:#bbf7d0" : "";
+    const clickAttr   = c.clickable
+      ? `style="cursor:pointer;${accentStyle}" onmouseenter="this.style.boxShadow='0 0 0 2px #22c55e55'" onmouseleave="this.style.boxShadow=''" onclick="showActiveCustomersModal()"`
+      : (accentStyle ? `style="${accentStyle}"` : "");
+    const valColor    = c.accent || c.clickable ? "color:#16a34a" : "";
+    return `<div class="card kpi" ${clickAttr}>
+      <div class="kpi-label"${c.accent||c.clickable ? ' style="color:#15803d"' : ""}>${c.label}</div>
+      <div class="kpi-value"${valColor ? ` style="${valColor}"` : ""}>${c.value}</div>
       <div class="kpi-sub">${c.sub}</div>
-    </div>`).join("");
-  const acCount = ac ? ac.count : 0;
-  const activeCard = `
-    <div class="card kpi" id="kpi-active-customers" style="cursor:pointer;border-color:#bbf7d0;transition:box-shadow .15s" onmouseenter="this.style.boxShadow='0 0 0 2px #22c55e55'" onmouseleave="this.style.boxShadow=''" onclick="showActiveCustomersModal()">
-      <div class="kpi-label" style="color:#15803d">이용 고객</div>
-      <div class="kpi-value" style="color:#16a34a">${acCount ? acCount + "개사" : "–"}</div>
-      <div class="kpi-sub" style="color:#4ade80">자금집행 + 결제 완료</div>
-      ${acCount ? `<div style="font-size:10px;color:#86efac;margin-top:2px">클릭 시 업체명 확인 ↗</div>` : ""}
+      <div class="kpi-basis">${c.basis}</div>
+      ${c.clickable && acAll ? '<div style="font-size:10px;color:#86efac;margin-top:2px">클릭 시 업체명 확인 ↗</div>' : ""}
     </div>`;
-  $("kpi-grid").innerHTML = regularCards + activeCard;
+  };
+
+  wrap.innerHTML = `
+    <div class="kpi-section-label">유입 코호트 — 유입일 기준 전환 추적</div>
+    <div class="kpi-row1">${r1Cards.map(c => mkCard(c)).join("")}</div>
+    <div class="kpi-section-label" style="margin-top:14px">거래 현황 — 실거래 일자 기준</div>
+    <div class="kpi-row2">${r2Cards.map(c => mkCard(c)).join("")}</div>`;
 }
 
 // 코호트 테이블
@@ -5498,6 +5582,104 @@ function parseDealPurchaseType(deal) {
 const PAID_STAGES = ["결제 완료", "결제 지연", "자금집행 완료"];
 const LOST_STAGES = ["진행 거절","신청 취소","보류 서류/계약"];
 
+// ── Row 1: 유입일 기준 코호트 KPI ──────────────────────────────────────────────
+function computeCohortKPI(period) {
+  const allLeads = STATE.rawLeads || [];
+  const allDeals = STATE.allDeals.length ? STATE.allDeals : (STATE.rawDeals || []);
+  const range    = getPeriodDateRange(period);
+
+  // 1) 코호트 리드 (유입일 기준 필터)
+  const cohortLeads = allLeads.filter(lead => {
+    const raw = lead.createdAt || lead["created_at"]
+      || lead["생성일"] || lead["생성 일"] || lead["등록일"];
+    if (!raw) return !range;
+    const t = new Date(raw);
+    return !isNaN(t) && (!range || (t >= range.from && t <= range.to));
+  });
+  const totalInflow    = cohortLeads.length;
+  const leadConversion = totalInflow; // 리드 파이프라인 생성 = 리드 자체
+
+  // 2) 코호트 org 집합
+  const cohortOrgIds   = new Set();
+  const cohortOrgNames = new Set();
+  for (const l of cohortLeads) {
+    const oid  = l.organizationId || l.organization_id || l["회사 ID"];
+    if (oid)  cohortOrgIds.add(String(oid));
+    const name = l["업체명"] || l["organization_name"] || l["organizationName"] || l["company"];
+    if (name) cohortOrgNames.add(String(name));
+  }
+  const inCohort = deal => {
+    const oid  = String(deal.organizationId || deal.organization_id || deal["회사 ID"] || "");
+    if (oid && cohortOrgIds.has(oid)) return true;
+    const name = deal["업체명"] || deal["organization_name"] || deal["organizationName"];
+    return !!(name && cohortOrgNames.has(String(name)));
+  };
+
+  // 3) 딜 전환: 코호트 org 중 딜이 존재하는 고유 업체 수
+  const dealConvOrgs = new Set();
+  for (const deal of allDeals) {
+    if (!inCohort(deal)) continue;
+    const key = String(deal.organizationId || deal.organization_id || deal["업체명"] || "");
+    if (key) dealConvOrgs.add(key);
+  }
+
+  // 4) 딜 성사 + 이용 고객 (자금집행 완료 단계만, 결제 완료 제외)
+  const mapping    = loadPipelineMapping();
+  const salesMap   = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
+  const wonStages  = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
+  let wonCount     = 0;
+  const activeOrgs = new Set();
+  for (const deal of allDeals) {
+    if (!inCohort(deal)) continue;
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    if (cur && wonStages.includes(cur)) {
+      wonCount++;
+      const key = String(deal.organizationId || deal.organization_id || deal["업체명"] || "");
+      if (key) activeOrgs.add(key);
+    }
+  }
+  return { totalInflow, leadConversion, dealConversion: dealConvOrgs.size, wonCount, activeCustomers: activeOrgs.size };
+}
+
+// ── Row 2: 실거래 일자 기준 활동 KPI ───────────────────────────────────────────
+function computeActivityKPI(period) {
+  const allDeals = STATE.allDeals.length ? STATE.allDeals : (STATE.rawDeals || []);
+  const range    = getPeriodDateRange(period);
+  const mapping        = loadPipelineMapping();
+  const salesMap       = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
+  const wonStages      = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
+  const completedStages= Object.values(salesMap).filter(m => m.cat === "완료").map(m => m.stage);
+  let wonByTradeDate     = 0;
+  let completedByPayDate = 0;
+  const tradingOrgs      = new Set();
+  const cycleSeconds     = [];
+  for (const deal of allDeals) {
+    const cur = detectCurrentStage(deal, "세일즈 파이프라인");
+    // 딜 성사: 자금집행 완료 단계 + 거래일이 해당 기간
+    if (cur && wonStages.includes(cur)) {
+      if (matchByDateField(deal, range, "거래일", "자금집행 완료일", "자금집행일")) {
+        wonByTradeDate++;
+        const key = String(deal.organizationId || deal.organization_id || deal["업체명"] || "");
+        if (key) tradingOrgs.add(key);
+      }
+      const dwells = parseStageDwells(deal, "세일즈 파이프라인");
+      const totalSec = Object.values(dwells).reduce((s, d) => s + (d.dwellSec || 0), 0);
+      if (totalSec > 0) cycleSeconds.push(totalSec);
+    }
+    // 딜 완료: 결제 완료 단계 + 결제(예정)일이 해당 기간
+    if (cur && completedStages.includes(cur)) {
+      if (matchByDateField(deal, range, "결제(예정)일", "결제예정일", "결제일", "거래일", "자금집행 완료일")) {
+        completedByPayDate++;
+        const key = String(deal.organizationId || deal.organization_id || deal["업체명"] || "");
+        if (key) tradingOrgs.add(key);
+      }
+    }
+  }
+  const avgCycleP50 = cycleSeconds.length
+    ? +(percentileOf(cycleSeconds, 50) / 86400).toFixed(1) : null;
+  return { wonByTradeDate, completedByPayDate, avgCycleP50, tradingCustomers: tradingOrgs.size };
+}
+
 // ── 이용 고객 집계 (자금집행 완료 + 결제 완료, 중복 제거) ──────────────────────
 function computeActiveCustomers(deals) {
   // 우선순위: 자금집행 완료(0) > 결제 완료(1) > 결제 지연(2)
@@ -6255,8 +6437,10 @@ function recomputeForPeriod(deals, leads = []) {
     STATE.cycles = [];
   }
 
-  STATE.regressions = detectRegressions(deals, mapping);
+  STATE.regressions    = detectRegressions(deals, mapping);
   STATE.activeCustomers = computeActiveCustomers(deals);
+  STATE.cohortKPI      = computeCohortKPI(STATE.period);
+  STATE.activityKPI    = computeActivityKPI(STATE.period);
 }
 
 // 실데이터 전체 로딩
