@@ -4647,6 +4647,14 @@ function deleteReport(id) {
   else renderWeeklyReports();
 }
 
+// 날짜 단축 포맷 "2026-05-25" → "26-05-25"
+function shortDate(str) {
+  if (!str) return "–";
+  const m = String(str).match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return str;
+  return `${m[1].slice(2)}-${m[2]}-${m[3]}`;
+}
+
 function getISOWeekNum(dateStr) {
   const d = new Date(dateStr);
   d.setHours(0, 0, 0, 0);
@@ -4677,11 +4685,11 @@ function _renderReportsInto(wrapId, type, yearSelectId) {
       const savedDate = (r.savedAt || "").slice(0, 10);
       const weekNum   = savedDate ? getISOWeekNum(savedDate) : "-";
       const rawPeriod = r.title ? r.title.replace(/^주간\s*보고서\s*/, "").trim() : (r.savedAt || "-");
-      // "2026-05-15 (금) 16:00:01 ~ 2026-05-22 (금) 16:00:00" → "2026-05-15 ~ 2026-05-22"
+      // "2026-05-15 (금) 16:00:01 ~ 2026-05-22 (금) 16:00:00" → "26-05-15 ~ 26-05-22"
       const period = rawPeriod.replace(/(\d{4}-\d{2}-\d{2})[\s\S]*?~[\s\S]*?(\d{4}-\d{2}-\d{2})[\s\S]*/,
-        (_, s, e) => `${s} ~ ${e}`);
+        (_, s, e) => `${shortDate(s)} ~ ${shortDate(e)}`);
       return `<tr style="border-bottom:1px solid var(--line-1)">
-        <td style="padding:9px 12px;color:var(--fg-3);font-size:12px;white-space:nowrap;text-align:center">${savedDate}</td>
+        <td style="padding:9px 12px;color:var(--fg-3);font-size:12px;white-space:nowrap;text-align:center">${shortDate(savedDate)}</td>
         <td style="padding:9px 12px;text-align:center"><span style="font-size:11px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 7px;white-space:nowrap">${weekNum}주차</span></td>
         <td style="padding:9px 12px;color:var(--fg-2);font-size:12px;text-align:center">${period}</td>
         <td style="padding:9px 12px;text-align:center"><button onclick="showReportDetail('${r.id}')" class="ctrl" style="font-size:11px;padding:2px 9px;height:26px;background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe">상세보기</button></td>
