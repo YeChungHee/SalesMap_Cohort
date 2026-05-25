@@ -924,6 +924,18 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.11.3",
+    date: "2026-05-25",
+    label: "이용 고객 전체/월별 분기 — 전체 기간 시 PAID_STAGES 전체 집계",
+    items: [
+      { type:"feat", text:"전체 기간: 이용 고객 = 자금집행 완료 + 결제 완료 + 결제 지연 전체 합산" },
+      { type:"feat", text:"특정 월: 이용 고객 = 자금집행 완료 단계만 (기존 유지)" },
+      { type:"feat", text:"드릴다운 패널 — 전체 기간: 단계 배지(자금집행/결제완료/결제지연) 표시, 특정 월: 건수 표시" },
+      { type:"feat", text:"이용 고객 카드 sub/basis 텍스트 기간별 동적 변경" },
+      { type:"refactor", text:"computeCohortKPI() isAllPeriod 플래그 반환, deals에 stage/stageLabel 저장" }
+    ]
+  },
+  {
     version: "2.11.2",
     date: "2026-05-25",
     label: "KPI 카드 UX 개선 — 개사 제거 · Row 컬러 · 이용 고객 드릴다운",
@@ -2343,7 +2355,10 @@ function renderKPI() {
     { label:"리드 전환", value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 리드 파이프라인", row:1 },
     { label:"딜 전환",   value: dc   ? fmt(dc)   : "–", sub:`리드 대비 ${lc ? pct(dc,lc) : "–"}`, basis:"유입 업체 → 딜 파이프라인",   row:1 },
     { label:"딜 성사",   value: wc   ? fmt(wc)   : "–", sub:`딜 대비 ${dc ? pct(wc,dc) : "–"}`,  basis:"유입 업체 → 자금집행 완료",   row:1 },
-    { label:"이용 고객", value: acCo ? String(acCo) : "–", sub:"자금집행 완료 단계", basis:"결제 완료 제외", row:1, cohortActive:true },
+    { label:"이용 고객", value: acCo ? String(acCo) : "–",
+      sub:  ck.isAllPeriod ? "자금집행+결제완료+지연 전체" : "자금집행 완료 단계",
+      basis:ck.isAllPeriod ? "누적 전체 이용 업체"         : "결제 완료 제외",
+      row:1, cohortActive:true },
   ];
 
   // Row 2 — 거래 현황
@@ -5616,32 +5631,51 @@ const LOST_STAGES = ["진행 거절","신청 취소","보류 서류/계약"];
 // dealMatchesPeriod(deal, range) 로 이미 기간 필터된 데이터이므로
 // rawLeads.createdAt 대신 이 데이터를 그대로 활용한다.
 function computeCohortKPI(period) {
-  const t        = cohortTotals();   // 기간 필터 적용된 소스별 합계
+  const t        = cohortTotals();
   const allDeals = STATE.allDeals.length ? STATE.allDeals : (STATE.rawDeals || []);
   const range    = getPeriodDateRange(period);
   const mapping  = loadPipelineMapping();
   const salesMap = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
-  // 딜 성사 = cat:"성사" (자금집행 완료), 이용 고객 = 성사 단계의 고유 업체
   const wonStages = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
 
+  // ── 이용 고객 집계 기준 분기 ──────────────────────────────────────────────────
+  // 전체 기간: 자금집행 완료 + 결제 완료 + 결제 지연 (누적 전체 이용 업체)
+  // 특정 월:   자금집행 완료만 (해당 월 현재 활성 업체)
+  const isAll = !period || period === "all";
+  const stagesForActive = isAll ? PAID_STAGES : wonStages;
+
+  // 단계별 라벨 (드릴다운 배지용)
+  const STAGE_LABEL = {
+    "자금집행 완료": { cls:"badge-jiphaeng", txt:"자금집행" },
+    "결제 완료":     { cls:"badge-paid",     txt:"결제완료" },
+    "결제 지연":     { cls:"badge-delay",    txt:"결제지연" },
+  };
+
   let wonCount = 0;
-  const activeOrgMap = {}; // key → { name, deals: [{date, dealId}] }
+  const activeOrgMap = {}; // key → { name, deals: [{date, stage}] }
   for (const deal of allDeals) {
     if (!dealMatchesPeriod(deal, range)) continue;
     const cur = detectCurrentStage(deal, "세일즈 파이프라인");
-    if (cur && wonStages.includes(cur)) {
-      wonCount++;
+    // wonCount는 항상 wonStages(자금집행 완료) 기준 — 딜 성사 카드용
+    if (cur && wonStages.includes(cur)) wonCount++;
+    // 이용 고객은 기간에 따라 stagesForActive 기준
+    if (cur && stagesForActive.includes(cur)) {
       const orgId   = deal.organizationId || deal.organization_id || null;
       const orgName = deal["업체명"] || deal["organization_name"] || deal["organizationName"]
                     || (orgId && STATE.orgMap?.[orgId]?.name) || orgId || "미상";
       const key = String(orgId || orgName);
       if (!activeOrgMap[key]) activeOrgMap[key] = { name: String(orgName), deals: [] };
-      // 자금집행 일자: 거래일 → 자금집행 완료일 → 자금집행일 순으로 폴백
-      const dateRaw = deal["거래일"] || deal["자금집행 완료일"] || deal["자금집행일"] || null;
-      activeOrgMap[key].deals.push({ date: dateRaw || null });
+      const dateRaw = deal["거래일"] || deal["자금집행 완료일"] || deal["자금집행일"]
+                    || deal["결제(예정)일"] || deal["결제예정일"] || deal["결제일"] || null;
+      activeOrgMap[key].deals.push({
+        date:  dateRaw || null,
+        stage: cur,
+        stageLabel: STAGE_LABEL[cur] || { cls:"badge-jiphaeng", txt: cur },
+      });
     }
   }
-  // 업체별 딜 수 기준 내림차순, 같으면 이름 오름차순
+
+  // 업체별 딜 수 내림차순, 같으면 이름 오름차순
   const activeOrgDetails = Object.values(activeOrgMap)
     .sort((a, b) => b.deals.length - a.deals.length || a.name.localeCompare(b.name, "ko"));
 
@@ -5651,7 +5685,8 @@ function computeCohortKPI(period) {
     dealConversion: t.deals || 0,
     wonCount,
     activeCustomers: activeOrgDetails.length,
-    activeOrgDetails,  // [{name, deals:[{date}]}] — 드릴다운용
+    activeOrgDetails,  // [{name, deals:[{date, stage, stageLabel}]}]
+    isAllPeriod: isAll, // 드릴다운 모달 분기용
   };
 }
 
@@ -6893,7 +6928,8 @@ function closeActiveCustomersModal() {
 function showCohortActiveModal() {
   const ck = STATE.cohortKPI;
   if (!ck || !ck.activeOrgDetails) return;
-  const details = ck.activeOrgDetails;
+  const details    = ck.activeOrgDetails;
+  const isAll      = ck.isAllPeriod;
   const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
   const totalDeals  = details.reduce((s, o) => s + o.deals.length, 0);
 
@@ -6905,44 +6941,50 @@ function showCohortActiveModal() {
     return `${d.getMonth()+1}월 ${d.getDate()}일`;
   };
 
-  // 업체별 행 생성 — 딜 2건 이상이면 (1), (2) 분리
+  // 업체별 행 생성
   const rows = details.flatMap(o => {
     const safe = o.name.replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    if (o.deals.length === 1) {
-      return [`<div class="acm-item">
-        <span class="acm-name">${safe}</span>
+    return o.deals.map((dl, i) => {
+      const numLabel = o.deals.length > 1
+        ? `<span style="font-size:10px;color:var(--fg-4);margin-left:4px">(${i+1})</span>` : "";
+      const cntBadge = o.deals.length > 1
+        ? `<span class="acm-badge badge-jiphaeng">${i+1}/${o.deals.length}건</span>`
+        : `<span class="acm-badge badge-jiphaeng">1건</span>`;
+
+      // 전체 기간: 단계 배지 표시 / 특정 월: 건수만
+      const stageBadge = isAll
+        ? `<span class="acm-badge ${dl.stageLabel?.cls||'badge-jiphaeng'}">${dl.stageLabel?.txt||dl.stage||"자금집행"}</span>`
+        : cntBadge;
+
+      return `<div class="acm-item">
+        <span class="acm-name">${safe}${numLabel}</span>
         <span class="acm-col-jiphaeng" style="justify-content:center;display:flex">
-          <span class="acm-badge badge-jiphaeng">${fmtDate(o.deals[0].date)}</span>
+          <span class="acm-badge badge-jiphaeng">${fmtDate(dl.date)}</span>
         </span>
         <span class="acm-col-paid" style="justify-content:center;display:flex">
-          <span class="acm-badge badge-jiphaeng">1건</span>
+          ${stageBadge}
         </span>
-      </div>`];
-    }
-    return o.deals.map((dl, i) => `<div class="acm-item">
-      <span class="acm-name">${safe}<span style="font-size:10px;color:var(--fg-4);margin-left:4px">(${i+1})</span></span>
-      <span class="acm-col-jiphaeng" style="justify-content:center;display:flex">
-        <span class="acm-badge badge-jiphaeng">${fmtDate(dl.date)}</span>
-      </span>
-      <span class="acm-col-paid" style="justify-content:center;display:flex">
-        <span class="acm-badge badge-jiphaeng">${i+1}/${o.deals.length}건</span>
-      </span>
-    </div>`);
+      </div>`;
+    });
   });
 
-  // 기존 패널 재활용 — 제목/메타/컬럼헤더/리스트만 교체
+  // 컬럼 헤더 — 전체/월별 분기
+  const colPaidHeader = isAll ? "단계" : "건수";
+  const metaText = isAll
+    ? `총 ${details.length}개 업체 · ${totalDeals}건 (자금집행+결제완료+지연)${periodLabel}`
+    : `총 ${details.length}개 업체 · ${totalDeals}건 자금집행 완료${periodLabel}`;
+
   document.querySelector("#active-customers-panel .acm-title").textContent = "이용 고객 (코호트)";
   document.querySelector("#active-customers-panel .acm-col-header").innerHTML =
     `<span style="flex:1">업체명</span>
-     <span class="col-jiphaeng" style="width:110px;text-align:center">자금집행(일자)</span>
-     <span class="col-paid" style="width:80px;text-align:center">건수</span>`;
-  $("acm-meta-bar").textContent = `총 ${details.length}개 업체 · ${totalDeals}건 자금집행 완료${periodLabel}`;
+     <span class="col-jiphaeng" style="width:110px;text-align:center">일자</span>
+     <span class="col-paid" style="width:80px;text-align:center">${colPaidHeader}</span>`;
+  $("acm-meta-bar").textContent = metaText;
   $("acm-list").innerHTML = rows.length
     ? rows.join("")
-    : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 자금집행 업체 없음</div>`;
+    : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 이용 업체 없음</div>`;
 
   const overlay = document.getElementById("active-customers-overlay");
-  // 닫을 때 제목 복원을 위해 flag 저장
   overlay.dataset.mode = "cohort";
   overlay.classList.add("open");
   overlay.onclick = e => { if (e.target === overlay) closeActiveCustomersModal(); };
