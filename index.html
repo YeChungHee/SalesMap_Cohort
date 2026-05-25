@@ -7135,12 +7135,16 @@ function showCohortActiveModal() {
   const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
   const totalDeals  = details.reduce((s, o) => s + o.deals.length, 0);
 
-  // 날짜 포맷 (YYYY-MM-DD → YYYY년 M월 D일)
+  // 날짜 포맷 (YYYY-MM-DD → YY-MM-DD)
   const fmtDate = raw => {
     if (!raw) return "–";
+    const m = String(raw).match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1].slice(2)}-${m[2]}-${m[3]}`;
     const d = new Date(raw);
     if (isNaN(d)) return String(raw).slice(0, 10);
-    return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
+    const mm = String(d.getMonth()+1).padStart(2,"0");
+    const dd = String(d.getDate()).padStart(2,"0");
+    return `${String(d.getFullYear()).slice(2)}-${mm}-${dd}`;
   };
 
   // 업체별 행 생성
