@@ -953,6 +953,15 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.12.8",
+    date: "2026-05-25",
+    label: "fix: 이용 고객 모달 자금집행 날짜 내림차순 정렬",
+    items: [
+      { type:"fix", text:"showCohortActiveModal() — 전체 딜을 자금집행 날짜 내림차순(최신순)으로 정렬하여 표시" },
+      { type:"fix", text:"업체별 순번 (n) 표시도 날짜 정렬 순서에 맞게 재계산 (1=가장 최근)" }
+    ]
+  },
+  {
     version: "2.12.7",
     date: "2026-05-25",
     label: "fix: 리드 전환율 100% 고정 + 전체 기간 카드 필터 리셋 버그 수정",
@@ -7192,31 +7201,47 @@ function showCohortActiveModal() {
     return `${String(d.getFullYear()).slice(2)}-${mm}-${dd}`;
   };
 
-  // 업체별 행 생성
-  const rows = details.flatMap(o => {
-    const safe = o.name.replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    return o.deals.map((dl, i) => {
-      const numLabel = o.deals.length > 1
-        ? `<span style="font-size:10px;color:var(--fg-4);margin-left:4px">(${i+1})</span>` : "";
-      const cntBadge = o.deals.length > 1
-        ? `<span class="acm-badge badge-jiphaeng">${i+1}/${o.deals.length}건</span>`
-        : `<span class="acm-badge badge-jiphaeng">1건</span>`;
+  // 모든 딜을 자금집행 날짜 내림차순 정렬 후 행 생성
+  const allDealItems = details.flatMap(o =>
+    o.deals.map(dl => ({ o, dl }))
+  );
+  allDealItems.sort((a, b) => {
+    const da = a.dl.date ? new Date(a.dl.date).getTime() : 0;
+    const db = b.dl.date ? new Date(b.dl.date).getTime() : 0;
+    return db - da; // 내림차순 (최신 → 오래된 순)
+  });
 
-      // 전체 기간: 단계 배지 표시 / 특정 월: 건수만
-      const stageBadge = isAll
-        ? `<span class="acm-badge ${dl.stageLabel?.cls||'badge-jiphaeng'}">${dl.stageLabel?.txt||dl.stage||"자금집행"}</span>`
-        : cntBadge;
+  // 업체별 딜 총 건수 맵 + 순번 카운터
+  const orgTotalMap = {};
+  const orgSeqMap   = {};
+  for (const o of details) orgTotalMap[o.name] = o.deals.length;
 
-      return `<div class="acm-item">
-        <span class="acm-name">${safe}${numLabel}</span>
-        <span class="acm-col-jiphaeng" style="justify-content:center;display:flex">
-          <span class="acm-badge badge-jiphaeng">${fmtDate(dl.date)}</span>
-        </span>
-        <span class="acm-col-paid" style="justify-content:center;display:flex">
-          ${stageBadge}
-        </span>
-      </div>`;
-    });
+  const rows = allDealItems.map(({ o, dl }) => {
+    const safe  = o.name.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const total = orgTotalMap[o.name] || 1;
+    orgSeqMap[o.name] = (orgSeqMap[o.name] || 0) + 1;
+    const seq   = orgSeqMap[o.name];
+
+    const numLabel = total > 1
+      ? `<span style="font-size:10px;color:var(--fg-4);margin-left:4px">(${seq})</span>` : "";
+    const cntBadge = total > 1
+      ? `<span class="acm-badge badge-jiphaeng">${seq}/${total}건</span>`
+      : `<span class="acm-badge badge-jiphaeng">1건</span>`;
+
+    // 전체 기간: 단계 배지 표시 / 특정 월: 건수만
+    const stageBadge = isAll
+      ? `<span class="acm-badge ${dl.stageLabel?.cls||'badge-jiphaeng'}">${dl.stageLabel?.txt||dl.stage||"자금집행"}</span>`
+      : cntBadge;
+
+    return `<div class="acm-item">
+      <span class="acm-name">${safe}${numLabel}</span>
+      <span class="acm-col-jiphaeng" style="justify-content:center;display:flex">
+        <span class="acm-badge badge-jiphaeng">${fmtDate(dl.date)}</span>
+      </span>
+      <span class="acm-col-paid" style="justify-content:center;display:flex">
+        ${stageBadge}
+      </span>
+    </div>`;
   });
 
   // 컬럼 헤더 — 전체/월별 분기
