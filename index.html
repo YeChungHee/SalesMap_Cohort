@@ -924,6 +924,17 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.11.2",
+    date: "2026-05-25",
+    label: "KPI 카드 UX 개선 — 개사 제거 · Row 컬러 · 이용 고객 드릴다운",
+    items: [
+      { type:"fix",    text:"KPI 카드 숫자 뒤 '개사' 텍스트 전면 제거 (딜 전환·이용 고객·거래 고객)" },
+      { type:"feat",   text:"Row 1 값·라벨 파란색 (#2563eb), Row 2 앰버 (#d97706) 컬러 구분 — accent/clickable 카드는 녹색 유지" },
+      { type:"feat",   text:"이용 고객(Row1) 클릭 → 드릴다운 패널: 업체별 자금집행 일자·건수, 중복 집행 업체는 (1)(2) 행 분리" },
+      { type:"refactor", text:"computeCohortKPI() activeOrgDetails 배열 반환 — [{name, deals:[{date}]}]" }
+    ]
+  },
+  {
     version: "2.11.1",
     date: "2026-05-25",
     label: "computeCohortKPI 날짜 오류 수정 — rawLeads.createdAt → cohortsBySource 기반",
@@ -2328,46 +2339,55 @@ function renderKPI() {
   const acCo = ck.activeCustomers|| 0;
 
   const r1Cards = [
-    { label:"총 유입",     value: inf  ? fmt(inf)  : "–", sub:"이번 기간 유입 리드",  basis:"리드 생성일 기준" },
-    { label:"리드 전환",   value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 리드 파이프라인" },
-    { label:"딜 전환",     value: dc   ? fmt(dc)+"개사" : "–", sub:`리드 대비 ${lc ? pct(dc,lc) : "–"}`, basis:"유입 업체 → 딜 파이프라인" },
-    { label:"딜 성사",     value: wc   ? fmt(wc)   : "–", sub:`딜 대비 ${dc ? pct(wc,dc) : "–"}`,  basis:"유입 업체 → 자금집행 완료" },
-    { label:"이용 고객",   value: acCo ? acCo+"개사" : "–", sub:"자금집행 완료 단계", basis:"결제 완료 제외", accent:true },
+    { label:"총 유입",   value: inf  ? fmt(inf)  : "–", sub:"이번 기간 유입 리드",  basis:"리드 생성일 기준",           row:1 },
+    { label:"리드 전환", value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 리드 파이프라인", row:1 },
+    { label:"딜 전환",   value: dc   ? fmt(dc)   : "–", sub:`리드 대비 ${lc ? pct(dc,lc) : "–"}`, basis:"유입 업체 → 딜 파이프라인",   row:1 },
+    { label:"딜 성사",   value: wc   ? fmt(wc)   : "–", sub:`딜 대비 ${dc ? pct(wc,dc) : "–"}`,  basis:"유입 업체 → 자금집행 완료",   row:1 },
+    { label:"이용 고객", value: acCo ? String(acCo) : "–", sub:"자금집행 완료 단계", basis:"결제 완료 제외", row:1, cohortActive:true },
   ];
 
   // Row 2 — 거래 현황
-  const wt  = ak.wonByTradeDate     || 0;
-  const cp  = ak.completedByPayDate || 0;
-  const cyc = ak.avgCycleP50;
-  const trd = ak.tradingCustomers   || 0;
+  const wt    = ak.wonByTradeDate     || 0;
+  const cp    = ak.completedByPayDate || 0;
+  const cyc   = ak.avgCycleP50;
   const acAll = ac ? ac.count : 0;
 
   const r2Cards = [
-    { label:"딜 성사",          value: wt  ? fmt(wt)  : "–", sub:"자금집행 완료 기준", basis:"거래일 기준" },
-    { label:"딜 완료",          value: cp  ? fmt(cp)  : "–", sub:"결제 완료 기준",    basis:"결제(예정)일 기준" },
-    { label:"평균 영업 사이클", value: cyc != null ? `${cyc}일` : "–", sub:"성사 딜 P50 기준", basis:"유입일 → 자금집행 완료일" },
-    { label:"거래 고객",        value: acAll ? acAll+"개사" : "–", sub:"자금집행+결제 완료", basis:"거래일+결제예정일", clickable:true },
+    { label:"딜 성사",          value: wt  ? fmt(wt)  : "–", sub:"자금집행 완료 기준", basis:"거래일 기준",           row:2 },
+    { label:"딜 완료",          value: cp  ? fmt(cp)  : "–", sub:"결제 완료 기준",    basis:"결제(예정)일 기준",      row:2 },
+    { label:"평균 영업 사이클", value: cyc != null ? `${cyc}일` : "–", sub:"성사 딜 P50 기준", basis:"유입일 → 자금집행 완료일", row:2 },
+    { label:"거래 고객",        value: acAll ? String(acAll) : "–", sub:"자금집행+결제 완료", basis:"거래일+결제예정일", row:2, clickable:true },
   ];
 
-  const mkCard = (c, extraClass="") => {
-    const accentStyle = c.accent ? "border-color:#bbf7d0" : "";
-    const clickAttr   = c.clickable
-      ? `style="cursor:pointer;${accentStyle}" onmouseenter="this.style.boxShadow='0 0 0 2px #22c55e55'" onmouseleave="this.style.boxShadow=''" onclick="showActiveCustomersModal()"`
-      : (accentStyle ? `style="${accentStyle}"` : "");
-    const valColor    = c.accent || c.clickable ? "color:#16a34a" : "";
-    return `<div class="card kpi" ${clickAttr}>
-      <div class="kpi-label"${c.accent||c.clickable ? ' style="color:#15803d"' : ""}>${c.label}</div>
-      <div class="kpi-value"${valColor ? ` style="${valColor}"` : ""}>${c.value}</div>
+  // row별 컬러 (accent/clickable 카드는 녹색 유지)
+  const ROW_COLOR = { 1: { label:"#1d4ed8", val:"#2563eb", border:"#bfdbfe", glow:"#3b82f655" },
+                      2: { label:"#b45309", val:"#d97706", border:"#fde68a", glow:"#f59e0b55" } };
+  const GREEN = { label:"#15803d", val:"#16a34a", border:"#bbf7d0", glow:"#22c55e55" };
+
+  const mkCard = (c) => {
+    const isGreen = c.cohortActive || c.clickable;
+    const rc      = isGreen ? GREEN : (ROW_COLOR[c.row] || {});
+    const onclick = c.cohortActive ? `showCohortActiveModal()`
+                  : c.clickable    ? `showActiveCustomersModal()` : "";
+    const cursor  = onclick ? "cursor:pointer;" : "";
+    const borderS = rc.border  ? `border-color:${rc.border};` : "";
+    const baseS   = `${cursor}${borderS}`;
+    const hoverJs = onclick
+      ? ` onmouseenter="this.style.boxShadow='0 0 0 2px ${rc.glow}'" onmouseleave="this.style.boxShadow=''"`
+      : "";
+    return `<div class="card kpi" style="${baseS}"${hoverJs}${onclick ? ` onclick="${onclick}"` : ""}>
+      <div class="kpi-label" style="color:${rc.label||"var(--fg-3)"}">${c.label}</div>
+      <div class="kpi-value" style="color:${rc.val||"var(--fg-1)"}">${c.value}</div>
       <div class="kpi-sub">${c.sub}</div>
       <div class="kpi-basis">${c.basis}</div>
-      ${c.clickable && acAll ? '<div style="font-size:10px;color:#86efac;margin-top:2px">클릭 시 업체명 확인 ↗</div>' : ""}
+      ${onclick && c.value !== "–" ? `<div style="font-size:10px;color:${rc.val};opacity:.7;margin-top:2px">클릭 시 상세 확인 ↗</div>` : ""}
     </div>`;
   };
 
   wrap.innerHTML = `
-    <div class="kpi-section-label">유입 코호트 — 유입일 기준 전환 추적</div>
+    <div class="kpi-section-label" style="color:#1d4ed8">유입 코호트 — 유입일 기준 전환 추적</div>
     <div class="kpi-row1">${r1Cards.map(c => mkCard(c)).join("")}</div>
-    <div class="kpi-section-label" style="margin-top:14px">거래 현황 — 실거래 일자 기준</div>
+    <div class="kpi-section-label" style="margin-top:14px;color:#b45309">거래 현황 — 실거래 일자 기준</div>
     <div class="kpi-row2">${r2Cards.map(c => mkCard(c)).join("")}</div>`;
 }
 
@@ -5605,23 +5625,33 @@ function computeCohortKPI(period) {
   const wonStages = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
 
   let wonCount = 0;
-  const activeOrgs = new Set();
+  const activeOrgMap = {}; // key → { name, deals: [{date, dealId}] }
   for (const deal of allDeals) {
     if (!dealMatchesPeriod(deal, range)) continue;
     const cur = detectCurrentStage(deal, "세일즈 파이프라인");
     if (cur && wonStages.includes(cur)) {
       wonCount++;
-      const key = String(deal.organizationId || deal.organization_id || deal["업체명"] || "");
-      if (key) activeOrgs.add(key);
+      const orgId   = deal.organizationId || deal.organization_id || null;
+      const orgName = deal["업체명"] || deal["organization_name"] || deal["organizationName"]
+                    || (orgId && STATE.orgMap?.[orgId]?.name) || orgId || "미상";
+      const key = String(orgId || orgName);
+      if (!activeOrgMap[key]) activeOrgMap[key] = { name: String(orgName), deals: [] };
+      // 자금집행 일자: 거래일 → 자금집행 완료일 → 자금집행일 순으로 폴백
+      const dateRaw = deal["거래일"] || deal["자금집행 완료일"] || deal["자금집행일"] || null;
+      activeOrgMap[key].deals.push({ date: dateRaw || null });
     }
   }
+  // 업체별 딜 수 기준 내림차순, 같으면 이름 오름차순
+  const activeOrgDetails = Object.values(activeOrgMap)
+    .sort((a, b) => b.deals.length - a.deals.length || a.name.localeCompare(b.name, "ko"));
 
   return {
-    totalInflow:    t.input || 0,   // orgChannelCount 기반 유입 업체 수
-    leadConversion: t.leads || 0,   // 리드 파이프라인 생성 수
-    dealConversion: t.deals || 0,   // 딜 파이프라인 생성 수 (전체 딜 카운트)
-    wonCount,                       // 자금집행 완료 딜 수
-    activeCustomers: activeOrgs.size, // 자금집행 완료 고유 업체 수
+    totalInflow:    t.input || 0,
+    leadConversion: t.leads || 0,
+    dealConversion: t.deals || 0,
+    wonCount,
+    activeCustomers: activeOrgDetails.length,
+    activeOrgDetails,  // [{name, deals:[{date}]}] — 드릴다운용
   };
 }
 
@@ -6821,7 +6851,7 @@ function showActiveCustomersModal() {
     "결제 지연":     ["badge-delay",    "결제지연"],
   };
   const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
-  $("acm-meta-bar").textContent = `총 ${ac.count}개사 · 자금집행 완료 + 결제 완료 기준${periodLabel}`;
+  $("acm-meta-bar").textContent = `총 ${ac.count}개 · 자금집행 완료 + 결제 완료 기준${periodLabel}`;
   // 3컬럼 렌더: 업체명(좌) | 자금집행(중앙) | 결제완료/결제지연(우)
   const stageMap = s => {
     const [cls, txt] = BADGE[s.type] || ["badge-paid", s.type];
@@ -6846,7 +6876,76 @@ function showActiveCustomersModal() {
   overlay.onclick = e => { if (e.target === overlay) closeActiveCustomersModal(); };
 }
 function closeActiveCustomersModal() {
-  document.getElementById("active-customers-overlay").classList.remove("open");
+  const overlay = document.getElementById("active-customers-overlay");
+  overlay.classList.remove("open");
+  // 코호트 모달로 열렸으면 제목/컬럼헤더 원상 복구
+  if (overlay.dataset.mode === "cohort") {
+    overlay.dataset.mode = "";
+    document.querySelector("#active-customers-panel .acm-title").textContent = "이용 고객 목록";
+    document.querySelector("#active-customers-panel .acm-col-header").innerHTML =
+      `<span style="flex:1">업체명</span>
+       <span class="col-jiphaeng" style="width:110px;text-align:center">자금집행</span>
+       <span class="col-paid" style="width:110px;text-align:center">결제완료/지연</span>`;
+  }
+}
+
+// ── Row 1 "이용 고객" 드릴다운 — 업체별 자금집행 건 목록 ──
+function showCohortActiveModal() {
+  const ck = STATE.cohortKPI;
+  if (!ck || !ck.activeOrgDetails) return;
+  const details = ck.activeOrgDetails;
+  const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
+  const totalDeals  = details.reduce((s, o) => s + o.deals.length, 0);
+
+  // 날짜 포맷 (YYYY-MM-DD → M월 D일)
+  const fmtDate = raw => {
+    if (!raw) return "–";
+    const d = new Date(raw);
+    if (isNaN(d)) return String(raw).slice(0, 10);
+    return `${d.getMonth()+1}월 ${d.getDate()}일`;
+  };
+
+  // 업체별 행 생성 — 딜 2건 이상이면 (1), (2) 분리
+  const rows = details.flatMap(o => {
+    const safe = o.name.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    if (o.deals.length === 1) {
+      return [`<div class="acm-item">
+        <span class="acm-name">${safe}</span>
+        <span class="acm-col-jiphaeng" style="justify-content:center;display:flex">
+          <span class="acm-badge badge-jiphaeng">${fmtDate(o.deals[0].date)}</span>
+        </span>
+        <span class="acm-col-paid" style="justify-content:center;display:flex">
+          <span class="acm-badge badge-jiphaeng">1건</span>
+        </span>
+      </div>`];
+    }
+    return o.deals.map((dl, i) => `<div class="acm-item">
+      <span class="acm-name">${safe}<span style="font-size:10px;color:var(--fg-4);margin-left:4px">(${i+1})</span></span>
+      <span class="acm-col-jiphaeng" style="justify-content:center;display:flex">
+        <span class="acm-badge badge-jiphaeng">${fmtDate(dl.date)}</span>
+      </span>
+      <span class="acm-col-paid" style="justify-content:center;display:flex">
+        <span class="acm-badge badge-jiphaeng">${i+1}/${o.deals.length}건</span>
+      </span>
+    </div>`);
+  });
+
+  // 기존 패널 재활용 — 제목/메타/컬럼헤더/리스트만 교체
+  document.querySelector("#active-customers-panel .acm-title").textContent = "이용 고객 (코호트)";
+  document.querySelector("#active-customers-panel .acm-col-header").innerHTML =
+    `<span style="flex:1">업체명</span>
+     <span class="col-jiphaeng" style="width:110px;text-align:center">자금집행(일자)</span>
+     <span class="col-paid" style="width:80px;text-align:center">건수</span>`;
+  $("acm-meta-bar").textContent = `총 ${details.length}개 업체 · ${totalDeals}건 자금집행 완료${periodLabel}`;
+  $("acm-list").innerHTML = rows.length
+    ? rows.join("")
+    : `<div style="padding:32px;text-align:center;color:var(--fg-4)">해당 기간 자금집행 업체 없음</div>`;
+
+  const overlay = document.getElementById("active-customers-overlay");
+  // 닫을 때 제목 복원을 위해 flag 저장
+  overlay.dataset.mode = "cohort";
+  overlay.classList.add("open");
+  overlay.onclick = e => { if (e.target === overlay) closeActiveCustomersModal(); };
 }
 
 // 1분마다 자동 갱신 (SLA 카운트다운)
