@@ -953,6 +953,41 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.12.7",
+    date: "2026-05-25",
+    label: "fix: 리드 전환율 100% 고정 + 전체 기간 카드 필터 리셋 버그 수정",
+    items: [
+      { type:"fix", text:"computeCohortKPI() — leadConversion을 기간 내 딜이 있는 unique 업체 수로 교체 (t.leads ≈ t.input → 항상 100% 문제 해결)" },
+      { type:"fix", text:"syncCardDropdownsToPeriod('all') — 전체 기간 선택 시 카드 드롭다운을 현재 월이 아닌 'all' 타입으로 올바르게 동기화" },
+      { type:"fix", text:"리드 전환 카드 basis 텍스트: '유입 업체 → 리드 파이프라인' → '유입 업체 → 딜 파이프라인 진입'" }
+    ]
+  },
+  {
+    version: "2.12.6",
+    date: "2026-05-25",
+    label: "fix: 이용 고객(코호트) 자금집행 날짜 YY-MM-DD 형식 통일",
+    items: [
+      { type:"fix", text:"showCohortActiveModal() fmtDate — 'YYYY년M월D일' → 'YY-MM-DD' 형식으로 변경" }
+    ]
+  },
+  {
+    version: "2.12.5",
+    date: "2026-05-25",
+    label: "fix: 보고서 목록 날짜 YY-MM-DD 형식 통일 (shortDate 헬퍼 추가)",
+    items: [
+      { type:"feat", text:"shortDate(str) 헬퍼 함수 추가 — '2026-05-25' → '26-05-25'" },
+      { type:"fix", text:"보고서 목록 생성일·기간 컬럼 모두 YY-MM-DD 형식 적용" }
+    ]
+  },
+  {
+    version: "2.12.4",
+    date: "2026-05-25",
+    label: "fix: 보고서 목록 기간 컬럼 날짜만 표시 (시간·요일 제거)",
+    items: [
+      { type:"fix", text:"_renderReportsInto() 기간 컬럼 — 시간·요일 제거, YYYY-MM-DD 날짜만 추출하는 regex 적용" }
+    ]
+  },
+  {
     version: "2.12.3",
     date: "2026-05-25",
     label: "feat: 주간 보고서 목록 페이지네이션 (5개 + 이전/다음 내비게이션)",
@@ -1965,12 +2000,10 @@ function dealMatchesPeriod(deal, range) {
 // 상위 period 드롭다운 → 퍼널·구매유형 카드 내부 드롭다운 동기화
 function syncCardDropdownsToPeriod(period) {
   if (!period || period === "all") {
-    // 전체 기간 선택 시 카드 내부 드롭다운을 현재 월로 리셋
-    const now = new Date();
-    const curMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    STATE.funnelPeriodType  = 'monthly'; STATE.funnelPeriodValue  = curMonth;
-    STATE.custPeriodType    = 'monthly'; STATE.custPeriodValue    = curMonth;
-    STATE.cohortPeriodType  = 'monthly'; STATE.cohortPeriodValue  = curMonth;
+    // 전체 기간 선택 시 카드 내부 드롭다운도 전체 기간으로 동기화
+    STATE.funnelPeriodType  = 'all'; STATE.funnelPeriodValue  = 'all';
+    STATE.custPeriodType    = 'all'; STATE.custPeriodValue    = 'all';
+    STATE.cohortPeriodType  = 'all'; STATE.cohortPeriodValue  = 'all';
   } else if (/^\d{4}-\d{2}$/.test(period)) {
     STATE.funnelPeriodType  = 'monthly'; STATE.funnelPeriodValue  = period;
     STATE.custPeriodType    = 'monthly'; STATE.custPeriodValue    = period;
@@ -2442,7 +2475,7 @@ function renderKPI() {
 
   const r1Cards = [
     { label:"총 유입",   value: inf  ? fmt(inf)  : "–", sub:"이번 기간 유입 리드",  basis:"리드 생성일 기준",           row:1 },
-    { label:"리드 전환", value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 리드 파이프라인", row:1 },
+    { label:"리드 전환", value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 딜 파이프라인 진입", row:1 },
     { label:"딜 전환",   value: dc   ? fmt(dc)   : "–", sub:`리드 대비 ${lc ? pct(dc,lc) : "–"}`, basis:"유입 업체 → 딜 파이프라인",   row:1 },
     { label:"딜 성사",   value: wc   ? fmt(wc)   : "–", sub:`딜 대비 ${dc ? pct(wc,dc) : "–"}`,  basis:"유입 업체 → 자금집행 완료",   row:1 },
     { label:"이용 고객", value: acCo ? String(acCo) : "–",
@@ -5875,9 +5908,21 @@ function computeCohortKPI(period) {
   const activeOrgDetails = Object.values(activeOrgMap)
     .sort((a, b) => b.deals.length - a.deals.length || a.name.localeCompare(b.name, "ko"));
 
+  // 리드 전환 = 기간 내 세일즈 딜이 있는 unique 업체 수
+  // (t.leads ≈ t.input 이라 항상 100%가 되는 문제 수정 — 리드=유입 모델에서 의미 있는 전환 지표로 교체)
+  const orgWithDeals = new Set();
+  for (const deal of allDeals) {
+    if (!dealMatchesPeriod(deal, range)) continue;
+    const orgId   = deal.organizationId || deal.organization_id || null;
+    const orgName = deal["업체명"] || deal["organization_name"] || deal["organizationName"]
+                  || (orgId && STATE.orgMap?.[orgId]?.name) || orgId || "미상";
+    orgWithDeals.add(String(orgId || orgName));
+  }
+  const leadConversionCount = orgWithDeals.size;
+
   return {
     totalInflow:    t.input || 0,
-    leadConversion: t.leads || 0,
+    leadConversion: leadConversionCount,
     dealConversion: t.deals || 0,
     wonCount,
     activeCustomers: activeOrgDetails.length,
