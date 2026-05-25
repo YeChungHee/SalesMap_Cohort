@@ -924,6 +924,15 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.11.1",
+    date: "2026-05-25",
+    label: "computeCohortKPI 날짜 오류 수정 — rawLeads.createdAt → cohortsBySource 기반",
+    items: [
+      { type:"fix", text:"computeCohortKPI() — SalesMap /v2/lead API가 날짜 필드(createdAt 등) 미반환으로 특정 월 선택 시 Row1 전체 '–' 표시되던 버그 수정" },
+      { type:"refactor", text:"cohortTotals() 활용 (총유입·리드전환·딜전환) + dealMatchesPeriod 기반 딜성사·이용고객 집계 — rawLeads 의존 제거" }
+    ]
+  },
+  {
     version: "2.11.0",
     date: "2026-05-25",
     label: "KPI 2행 레이아웃 — 유입 코호트(Row1) + 거래 현황(Row2)",
@@ -5583,54 +5592,22 @@ const PAID_STAGES = ["결제 완료", "결제 지연", "자금집행 완료"];
 const LOST_STAGES = ["진행 거절","신청 취소","보류 서류/계약"];
 
 // ── Row 1: 유입일 기준 코호트 KPI ──────────────────────────────────────────────
+// cohortsBySource / cohortTotals() 는 recomputeForPeriod() 에서
+// dealMatchesPeriod(deal, range) 로 이미 기간 필터된 데이터이므로
+// rawLeads.createdAt 대신 이 데이터를 그대로 활용한다.
 function computeCohortKPI(period) {
-  const allLeads = STATE.rawLeads || [];
+  const t        = cohortTotals();   // 기간 필터 적용된 소스별 합계
   const allDeals = STATE.allDeals.length ? STATE.allDeals : (STATE.rawDeals || []);
   const range    = getPeriodDateRange(period);
+  const mapping  = loadPipelineMapping();
+  const salesMap = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
+  // 딜 성사 = cat:"성사" (자금집행 완료), 이용 고객 = 성사 단계의 고유 업체
+  const wonStages = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
 
-  // 1) 코호트 리드 (유입일 기준 필터)
-  const cohortLeads = allLeads.filter(lead => {
-    const raw = lead.createdAt || lead["created_at"]
-      || lead["생성일"] || lead["생성 일"] || lead["등록일"];
-    if (!raw) return !range;
-    const t = new Date(raw);
-    return !isNaN(t) && (!range || (t >= range.from && t <= range.to));
-  });
-  const totalInflow    = cohortLeads.length;
-  const leadConversion = totalInflow; // 리드 파이프라인 생성 = 리드 자체
-
-  // 2) 코호트 org 집합
-  const cohortOrgIds   = new Set();
-  const cohortOrgNames = new Set();
-  for (const l of cohortLeads) {
-    const oid  = l.organizationId || l.organization_id || l["회사 ID"];
-    if (oid)  cohortOrgIds.add(String(oid));
-    const name = l["업체명"] || l["organization_name"] || l["organizationName"] || l["company"];
-    if (name) cohortOrgNames.add(String(name));
-  }
-  const inCohort = deal => {
-    const oid  = String(deal.organizationId || deal.organization_id || deal["회사 ID"] || "");
-    if (oid && cohortOrgIds.has(oid)) return true;
-    const name = deal["업체명"] || deal["organization_name"] || deal["organizationName"];
-    return !!(name && cohortOrgNames.has(String(name)));
-  };
-
-  // 3) 딜 전환: 코호트 org 중 딜이 존재하는 고유 업체 수
-  const dealConvOrgs = new Set();
-  for (const deal of allDeals) {
-    if (!inCohort(deal)) continue;
-    const key = String(deal.organizationId || deal.organization_id || deal["업체명"] || "");
-    if (key) dealConvOrgs.add(key);
-  }
-
-  // 4) 딜 성사 + 이용 고객 (자금집행 완료 단계만, 결제 완료 제외)
-  const mapping    = loadPipelineMapping();
-  const salesMap   = Object.fromEntries(mapping.filter(m => m.pipe === "세일즈").map(m => [m.stage, m]));
-  const wonStages  = Object.values(salesMap).filter(m => m.cat === "성사").map(m => m.stage);
-  let wonCount     = 0;
+  let wonCount = 0;
   const activeOrgs = new Set();
   for (const deal of allDeals) {
-    if (!inCohort(deal)) continue;
+    if (!dealMatchesPeriod(deal, range)) continue;
     const cur = detectCurrentStage(deal, "세일즈 파이프라인");
     if (cur && wonStages.includes(cur)) {
       wonCount++;
@@ -5638,7 +5615,14 @@ function computeCohortKPI(period) {
       if (key) activeOrgs.add(key);
     }
   }
-  return { totalInflow, leadConversion, dealConversion: dealConvOrgs.size, wonCount, activeCustomers: activeOrgs.size };
+
+  return {
+    totalInflow:    t.input || 0,   // orgChannelCount 기반 유입 업체 수
+    leadConversion: t.leads || 0,   // 리드 파이프라인 생성 수
+    dealConversion: t.deals || 0,   // 딜 파이프라인 생성 수 (전체 딜 카운트)
+    wonCount,                       // 자금집행 완료 딜 수
+    activeCustomers: activeOrgs.size, // 자금집행 완료 고유 업체 수
+  };
 }
 
 // ── Row 2: 실거래 일자 기준 활동 KPI ───────────────────────────────────────────
