@@ -924,6 +924,16 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.11.4",
+    date: "2026-05-25",
+    label: "단계별 체류 시간 트렌드 — 페이지 로드 시 실데이터 자동 표시",
+    items: [
+      { type:"fix",  text:"fetchDwellHeatmap() — STATE.allDeals 캐시 우선 사용, API 중복 호출 제거" },
+      { type:"feat", text:"loadRealData() 딜 로드 완료 후 fetchDwellHeatmap(deals) 자동 호출 — 버튼 클릭 불필요" },
+      { type:"fix",  text:"목업 안내 문구 개선 — '목업 데이터 — 로그인 후 자동 로드됩니다'" }
+    ]
+  },
+  {
     version: "2.11.3",
     date: "2026-05-25",
     label: "이용 고객 전체/월별 분기 — 전체 기간 시 PAID_STAGES 전체 집계",
@@ -6548,6 +6558,8 @@ async function loadRealData() {
       populateCohortPeriodOptions();  // 코호트 기간 옵션 초기화
       repopulateSourceFilter();   // 실제 유입경로 값으로 드롭다운 갱신
       fetchPipelineVelocityFromDeals(deals).catch(() => {});
+      // 단계별 체류 시간 트렌드 — STATE.allDeals 재사용 (API 중복 호출 없음)
+      fetchDwellHeatmap(deals).catch(e => console.warn("DwellHeatmap auto-load failed:", e.message));
     }
   } catch(e) {
     console.warn("loadRealData failed:", e.message);
@@ -6743,13 +6755,16 @@ async function handleRefreshVelocity() {
 
 // ── 체류 시간 히트맵 ──
 // 스테이지 × 월별 P50 dwell 시간 계산
-async function fetchDwellHeatmap() {
+async function fetchDwellHeatmap(cachedDeals = null) {
   const PIPELINE = "세일즈 파이프라인";
   const mapping  = loadPipelineMapping();
   const included = mapping.filter(m => m.pipe === "세일즈" && m.include);
   const stageOrder = included.map(m => m.stage);
 
-  const deals = await salesmapGetAllDeals();
+  // STATE.allDeals 또는 전달받은 cachedDeals 재사용 → API 중복 호출 방지
+  const deals = cachedDeals?.length ? cachedDeals
+              : STATE.allDeals.length ? STATE.allDeals
+              : await salesmapGetAllDeals();
   if (!deals.length) throw new Error("딜 데이터 없음");
 
   // dwellMap[stage][YYYY-MM] = [sec, ...]
@@ -6852,7 +6867,7 @@ function renderDwellHeatmap(useMock = false) {
     <span><span style="display:inline-block;width:10px;height:10px;background:#facc15;border-radius:2px;margin-right:3px"></span>70~100%</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:2px;margin-right:3px"></span>100~150%</span>
     <span><span style="display:inline-block;width:10px;height:10px;background:#dc2626;border-radius:2px;margin-right:3px"></span>150%+</span>
-    ${!dwellMap ? `<span style="margin-left:8px;color:var(--muted);font-style:italic">목업 데이터 표시 중 — API 새로고침으로 실데이터 로드</span>` : ""}
+    ${!dwellMap ? `<span style="margin-left:8px;color:#f97316;font-style:italic;font-weight:600">목업 데이터 — 로그인 후 자동 로드됩니다</span>` : ""}
   </div>`;
 
   wrap.innerHTML = html;
