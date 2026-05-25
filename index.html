@@ -4676,7 +4676,10 @@ function _renderReportsInto(wrapId, type, yearSelectId) {
     const rows = pageList.map(r => {
       const savedDate = (r.savedAt || "").slice(0, 10);
       const weekNum   = savedDate ? getISOWeekNum(savedDate) : "-";
-      const period    = r.title ? r.title.replace(/^주간\s*보고서\s*/, "").trim() : (r.savedAt || "-");
+      const rawPeriod = r.title ? r.title.replace(/^주간\s*보고서\s*/, "").trim() : (r.savedAt || "-");
+      // "2026-05-15 (금) 16:00:01 ~ 2026-05-22 (금) 16:00:00" → "2026-05-15 ~ 2026-05-22"
+      const period = rawPeriod.replace(/(\d{4}-\d{2}-\d{2})[\s\S]*?~[\s\S]*?(\d{4}-\d{2}-\d{2})[\s\S]*/,
+        (_, s, e) => `${s} ~ ${e}`);
       return `<tr style="border-bottom:1px solid var(--line-1)">
         <td style="padding:9px 12px;color:var(--fg-3);font-size:12px;white-space:nowrap;text-align:center">${savedDate}</td>
         <td style="padding:9px 12px;text-align:center"><span style="font-size:11px;background:#eff6ff;color:#1d4ed8;border-radius:4px;padding:2px 7px;white-space:nowrap">${weekNum}주차</span></td>
