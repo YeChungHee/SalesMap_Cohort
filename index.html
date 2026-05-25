@@ -7062,12 +7062,12 @@ function showCohortActiveModal() {
   const periodLabel = STATE.period && STATE.period !== "all" ? ` (${STATE.period})` : " (전체)";
   const totalDeals  = details.reduce((s, o) => s + o.deals.length, 0);
 
-  // 날짜 포맷 (YYYY-MM-DD → M월 D일)
+  // 날짜 포맷 (YYYY-MM-DD → YYYY년 M월 D일)
   const fmtDate = raw => {
     if (!raw) return "–";
     const d = new Date(raw);
     if (isNaN(d)) return String(raw).slice(0, 10);
-    return `${d.getMonth()+1}월 ${d.getDate()}일`;
+    return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;
   };
 
   // 업체별 행 생성
@@ -7098,7 +7098,7 @@ function showCohortActiveModal() {
   });
 
   // 컬럼 헤더 — 전체/월별 분기
-  const colPaidHeader = isAll ? "단계" : "건수";
+  const colPaidHeader = isAll ? "최종 단계" : "건수";
   const metaText = isAll
     ? `총 ${details.length}개 업체 · ${totalDeals}건 (자금집행+결제완료+지연)${periodLabel}`
     : `총 ${details.length}개 업체 · ${totalDeals}건 자금집행 완료${periodLabel}`;
@@ -7106,7 +7106,7 @@ function showCohortActiveModal() {
   document.querySelector("#active-customers-panel .acm-title").textContent = "이용 고객 (코호트)";
   document.querySelector("#active-customers-panel .acm-col-header").innerHTML =
     `<span style="flex:1">업체명</span>
-     <span class="col-jiphaeng" style="width:110px;text-align:center">일자</span>
+     <span class="col-jiphaeng" style="width:110px;text-align:center">자금집행</span>
      <span class="col-paid" style="width:80px;text-align:center">${colPaidHeader}</span>`;
   $("acm-meta-bar").textContent = metaText;
   $("acm-list").innerHTML = rows.length
