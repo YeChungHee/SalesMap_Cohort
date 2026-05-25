@@ -924,6 +924,14 @@ tbody tr:hover td{background:var(--primary-50)}
 // ══════════════════════════════════════════════
 const CHANGELOG = [
   {
+    version: "2.11.5",
+    date: "2026-05-25",
+    label: "fix: 초기 로드 시 딜 성사·이용 고객 '–' 표시 버그 수정",
+    items: [
+      { type:"fix", text:"computeFromDeals() — STATE.allDeals / rawDeals 를 recomputeForPeriod() 호출 전에 설정. 기존 순서 역전으로 computeCohortKPI / computeActivityKPI 가 빈 배열을 읽어 wonCount=0 → '–' 표시되던 버그 수정" }
+    ]
+  },
+  {
     version: "2.11.4",
     date: "2026-05-25",
     label: "단계별 체류 시간 트렌드 — 페이지 로드 시 실데이터 자동 표시",
@@ -6359,13 +6367,14 @@ function computeFromDeals(deals, leads = []) {
   // 자금집행 이력 (전기간)
   STATE.jiphaengHistory = computeJiphaengHistory(deals);
 
+  // 전기간 원본 백업을 recomputeForPeriod 호출 전에 설정
+  // → computeCohortKPI / computeActivityKPI 가 STATE.allDeals 를 읽으므로 먼저 세팅 필요
+  if (!STATE.allDeals.length) STATE.allDeals = deals;
+  STATE.rawDeals  = deals;
+  STATE.dataLoaded = true;
+
   // 기간 의존 통계 (cohortsBySource, pipelineMetrics, cycles, funnelData)
   recomputeForPeriod(deals, leads);
-
-  // 전기간 원본 백업 (최초 1회만 저장)
-  if (!STATE.allDeals.length) STATE.allDeals = deals;
-  STATE.rawDeals = deals;
-  STATE.dataLoaded = true;
 }
 
 // ── 기간 의존 통계만 재계산 (period 변경 시 호출) ──────────
