@@ -4675,7 +4675,10 @@ function computeWeeklyActivity(activities, notes, tasks, offset = 0) {
     contact: (consultItems ? consultItems.length : 0) + (reviewItems ? reviewItems.length : 0),
     email: emailCount,
     unresolved, totalRows: activityRows.length,
-    dupRemoved: activity ? (activity.dupRemoved || 0) : 0
+    dupRemoved: activity ? (activity.dupRemoved || 0) : 0,
+    // ── 임시 진단: 활동 레코드 구조 (중복 키 식별용, 확인 후 제거) ──
+    actKeys: (activity && activity.items && activity.items[0]) ? Object.keys(activity.items[0]).join(", ") : "",
+    actSample: (activity && activity.items && activity.items[0]) ? JSON.stringify(activity.items[0]).slice(0, 500) : ""
   };
 
   // 카드 상세도 동일 5W 구조로: 각 아이템에 해석된 업체(_org)·담당자(_owner) 부착
@@ -4833,6 +4836,7 @@ function renderWeeklyActivity(data, offset = 0) {
         ${cm.unresolved ? `<span style="font-size:10px;color:#dc2626;margin-left:4px">업체 미상 ${cm.unresolved}건</span>` : ""}
         ${cm.dupRemoved ? `<span style="font-size:10px;color:#ba7517;margin-left:4px">중복 ${cm.dupRemoved}건 제거</span>` : ""}
       </div>
+      ${cm.actKeys ? `<div style="font-size:10px;color:var(--fg-4);background:var(--bg-1);border:1px dashed var(--line-1);border-radius:6px;padding:6px 8px;margin-bottom:8px;word-break:break-all">🔎 활동필드: ${cm.actKeys}<br>샘플: ${String(cm.actSample).replace(/</g,"&lt;")}</div>` : ""}
       <div style="margin-bottom:8px">${fbtn("전체","all")}${fbtn("DB 생성","DB 생성")}${fbtn("고객 접촉활동","고객 접촉활동")}${fbtn("이메일 발송","이메일 발송")}</div>
       <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
         <table id="sales-activity-table" style="width:100%;border-collapse:collapse;min-width:680px">
