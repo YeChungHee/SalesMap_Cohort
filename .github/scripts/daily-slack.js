@@ -44,7 +44,8 @@ function request(rawUrl, options = {}, body = null) {
 // ── SalesMap API 호출 (index.html salesmapGet과 동일한 워커 프록시 프로토콜) ──
 // 워커는 POST { url, method, headers, body } 봉투를 받아 SalesMap으로 포워딩한다.
 const SALESMAP_BASE = "https://salesmap.kr/api";
-let _dbgPrinted = false;
+const DIAG = [];           // 진단 로그 (슬랙 메시지에 첨부)
+let _dbgSnippet = "";       // 첫 200 응답 본문 스니펫
 async function smFetch(path, params = {}) {
   const target = new url.URL(`${SALESMAP_BASE}${path}`);
   Object.entries(params).forEach(([k, v]) => target.searchParams.set(k, v));
@@ -58,15 +59,12 @@ async function smFetch(path, params = {}) {
         method: "POST",
         headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(envelope) },
       }, envelope);
-      if (res.status !== 200) { lastErr = new Error(`Worker ${res.status}`); continue; }
-      if (!_dbgPrinted) {   // 첫 응답 구조 1회 출력 (진단용)
-        _dbgPrinted = true;
-        console.log(`🔎 [debug] ${path} 응답 앞부분:`, String(res.body).slice(0, 300));
-      }
+      if (res.status !== 200) { lastErr = new Error(`Worker ${res.status}: ${String(res.body).slice(0,60)}`); continue; }
+      if (!_dbgSnippet) { _dbgSnippet = String(res.body).slice(0, 220); console.log(`🔎 [debug] ${path}:`, _dbgSnippet); }
       return JSON.parse(res.body);
     } catch (e) { lastErr = e; }
   }
-  throw lastErr || new Error(`API ${path} 워커 호출 실패`);
+  throw lastErr || new Error(`워커 호출 실패`);
 }
 
 // index.html과 동일: 커서 페이지네이션 + 실제 응답 키(data.data.{listKey})
@@ -78,7 +76,7 @@ async function fetchAll(path, listKey) {
     if (cursor) p.cursor = cursor;
     let data;
     try { data = await smFetch(path, p); }
-    catch (e) { console.warn(`  ⚠ ${path} 조회 실패: ${e.message}`); break; }
+    catch (e) { console.warn(`  ⚠ ${path} 조회 실패: ${e.message}`); DIAG.push(`${path.replace("/v2/","")} ✗ ${e.message}`); break; }
     const d     = (data && data.data) ? data.data : data;
     const batch = (d && (d[listKey] || d.list)) || (Array.isArray(data) ? data : []);
     if (!batch.length) break;
@@ -86,6 +84,7 @@ async function fetchAll(path, listKey) {
     cursor = (d && (d.nextCursor || d.next_cursor)) || data.nextCursor || null;
     if (!cursor) break;
   }
+  DIAG.push(`${path.replace("/v2/","")} 전체 ${items.length}`);
   return items;
 }
 
@@ -163,6 +162,10 @@ function buildSlackMsg(d) {
       { type: "context",
         elements: [{ type: "mrkdwn",
           text: `발송: ${dateStr(toKST(new Date()))} 09:00 KST · FlowPay Cohort Dashboard 자동 보고` }] },
+      // ── 임시 진단 블록 (원인 파악 후 제거) ──
+      { type: "context",
+        elements: [{ type: "mrkdwn",
+          text: `🔎 진단 | ${DIAG.join(" · ") || "수집 없음"}\n응답: ${(_dbgSnippet || "(200 응답 없음)").replace(/\n/g, " ")}` }] },
     ],
   };
 }
