@@ -46,6 +46,8 @@ function request(rawUrl, options = {}, body = null) {
 const SALESMAP_BASE = "https://salesmap.kr/api";
 const DIAG = [];           // 진단 로그 (슬랙 메시지에 첨부)
 let _dbgSnippet = "";       // 첫 200 응답 본문 스니펫
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
 async function smFetch(path, params = {}) {
   const target = new url.URL(`${SALESMAP_BASE}${path}`);
   Object.entries(params).forEach(([k, v]) => target.searchParams.set(k, v));
@@ -54,15 +56,19 @@ async function smFetch(path, params = {}) {
   const base     = WORKER_URL.replace(/\/$/, "");
   let lastErr = null;
   for (const ep of [base, `${base}/proxy`]) {
-    try {
-      const res = await request(ep, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(envelope) },
-      }, envelope);
-      if (res.status !== 200) { lastErr = new Error(`Worker ${res.status}: ${String(res.body).slice(0,60)}`); continue; }
-      if (!_dbgSnippet) { _dbgSnippet = String(res.body).slice(0, 220); console.log(`🔎 [debug] ${path}:`, _dbgSnippet); }
-      return JSON.parse(res.body);
-    } catch (e) { lastErr = e; }
+    // 429(Too Many Requests) 시 백오프 후 최대 4회 재시도
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const res = await request(ep, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(envelope) },
+        }, envelope);
+        if (res.status === 429) { lastErr = new Error("Worker 429 (rate limit)"); await sleep(1500 * (attempt + 1)); continue; }
+        if (res.status !== 200) { lastErr = new Error(`Worker ${res.status}: ${String(res.body).slice(0,60)}`); break; }
+        if (!_dbgSnippet) { _dbgSnippet = String(res.body).slice(0, 200); console.log(`🔎 [debug] ${path}:`, _dbgSnippet); }
+        return JSON.parse(res.body);
+      } catch (e) { lastErr = e; await sleep(800); }
+    }
   }
   throw lastErr || new Error(`워커 호출 실패`);
 }
@@ -83,6 +89,7 @@ async function fetchAll(path, listKey) {
     items  = items.concat(batch);
     cursor = (d && (d.nextCursor || d.next_cursor)) || data.nextCursor || null;
     if (!cursor) break;
+    await sleep(200);   // 페이지 간 지연 — 429 방지
   }
   DIAG.push(`${path.replace("/v2/","")} 전체 ${items.length}`);
   return items;
@@ -112,14 +119,13 @@ async function computeDailyActivity() {
     return dateStr(toKST(t)) === yd;
   };
 
-  const [orgs, leads, memos, todos, dealActs, leadActs] = await Promise.all([
-    fetchAll("/v2/organization",  "organizationList"),
-    fetchAll("/v2/lead",          "leadList"),
-    fetchAll("/v2/memo",          "memoList"),
-    fetchAll("/v2/todo",          "todoList"),
-    fetchAll("/v2/deal/activity", "dealActivityList"),
-    fetchAll("/v2/lead/activity", "leadActivityList"),
-  ]);
+  // 순차 호출 — 동시 호출 시 워커/SalesMap 레이트리밋(429) 발생하므로 하나씩 처리
+  const orgs     = await fetchAll("/v2/organization",  "organizationList");
+  const leads    = await fetchAll("/v2/lead",          "leadList");
+  const memos    = await fetchAll("/v2/memo",          "memoList");
+  const todos    = await fetchAll("/v2/todo",          "todoList");
+  const dealActs = await fetchAll("/v2/deal/activity", "dealActivityList");
+  const leadActs = await fetchAll("/v2/lead/activity", "leadActivityList");
 
   const newOrgs  = orgs.filter(inDay);
   const newLeads = leads.filter(inDay);
@@ -130,12 +136,11 @@ async function computeDailyActivity() {
   const todoDone = dayTodos.filter(t =>
     t["완료"] === true || t.completed === true || t["완료"] === "완료"
     || t.status === "완료" || t.status === "done" || t.is_done === true).length;
-  const sms = acts.filter(a =>
-    a.smsId || (a.type || "").toLowerCase().includes("sms")
-    || (a.type || "").includes("문자") || a.activity_type === "sms").length;
-  const email = acts.filter(a =>
-    a.emailId || a.emailMessageId || (a.type || "").toLowerCase().includes("email")
-    || (a.type || "").toLowerCase().includes("sequence") || a.activity_type === "email").length;
+  // 활동 피드는 한 통의 이메일에 발송·오픈·클릭 이벤트를 각각 보내므로 emailId/smsId 기준 distinct로 집계(중복 제거)
+  const emailIds = new Set(), smsIds = new Set();
+  acts.forEach(a => { if (a.emailId) emailIds.add(a.emailId); else if (a.smsId) smsIds.add(a.smsId); });
+  const sms = smsIds.size;
+  const email = emailIds.size;
 
   return { date: yd, newOrgs: newOrgs.length, newLeads: newLeads.length,
            memos: dayMemos.length, todoDone, todoTotal: dayTodos.length,
