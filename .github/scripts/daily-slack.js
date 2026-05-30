@@ -53,17 +53,23 @@ async function smFetch(path, params = {}) {
   return JSON.parse(res.body);
 }
 
-async function fetchAll(path, params = {}) {
+// index.html과 동일: 커서 페이지네이션 + 실제 응답 키(data.data.{listKey})
+async function fetchAll(path, listKey) {
   let items  = [];
   let cursor = null;
-  do {
-    const p = { ...params, limit: 100 };
+  for (let i = 0; i < 40; i++) {       // 최대 40페이지 × 100건
+    const p = { limit: 100 };
     if (cursor) p.cursor = cursor;
-    const data  = await smFetch(path, p);
-    const batch = data.items || data.data || data.results || [];
+    let data;
+    try { data = await smFetch(path, p); }
+    catch (e) { console.warn(`  ⚠ ${path} 조회 실패: ${e.message}`); break; }
+    const d     = (data && data.data) ? data.data : data;
+    const batch = (d && (d[listKey] || d.list)) || (Array.isArray(data) ? data : []);
+    if (!batch.length) break;
     items  = items.concat(batch);
-    cursor = data.next_cursor || data.nextCursor || null;
-  } while (cursor);
+    cursor = (d && (d.nextCursor || d.next_cursor)) || data.nextCursor || null;
+    if (!cursor) break;
+  }
   return items;
 }
 
@@ -81,21 +87,44 @@ function yesterdayKST() {
 async function computeDailyActivity() {
   const yd = dateStr(yesterdayKST());
 
-  const [orgs, leads, memos, todos, dealActs] = await Promise.all([
-    fetchAll("/v2/organization", { created_from: yd, created_to: yd }),
-    fetchAll("/v2/lead",         { created_from: yd, created_to: yd }),
-    fetchAll("/v2/memo",         { created_from: yd, created_to: yd }),
-    fetchAll("/v2/todo",         { created_from: yd, created_to: yd }),
-    fetchAll("/v2/deal/activity",{ created_from: yd, created_to: yd }),
+  // 전체를 받아 어제(KST) 날짜로 클라이언트 필터 (API가 created_from/to 미지원)
+  const inDay = item => {
+    const at = item.createdAt || item.created_at || item["생성일"] || item["생성 날짜"]
+             || item["시작일"] || item.startDate || item.date || null;
+    if (!at) return false;
+    const t = new Date(at);
+    if (isNaN(t)) return false;
+    return dateStr(toKST(t)) === yd;
+  };
+
+  const [orgs, leads, memos, todos, dealActs, leadActs] = await Promise.all([
+    fetchAll("/v2/organization",  "organizationList"),
+    fetchAll("/v2/lead",          "leadList"),
+    fetchAll("/v2/memo",          "memoList"),
+    fetchAll("/v2/todo",          "todoList"),
+    fetchAll("/v2/deal/activity", "dealActivityList"),
+    fetchAll("/v2/lead/activity", "leadActivityList"),
   ]);
 
-  const todoDone = todos.filter(t => t.status === "done" || t.is_done === true).length;
-  const sms      = dealActs.filter(a => a.type === "sms"   || a.activity_type === "sms").length;
-  const email    = dealActs.filter(a => a.type === "email" || a.activity_type === "email").length;
+  const newOrgs  = orgs.filter(inDay);
+  const newLeads = leads.filter(inDay);
+  const dayMemos = memos.filter(inDay);
+  const dayTodos = todos.filter(inDay);
+  const acts     = [...dealActs, ...leadActs].filter(inDay);
 
-  return { date: yd, newOrgs: orgs.length, newLeads: leads.length,
-           memos: memos.length, todoDone, todoTotal: todos.length,
-           sms, email, actTotal: dealActs.length };
+  const todoDone = dayTodos.filter(t =>
+    t["완료"] === true || t.completed === true || t["완료"] === "완료"
+    || t.status === "완료" || t.status === "done" || t.is_done === true).length;
+  const sms = acts.filter(a =>
+    a.smsId || (a.type || "").toLowerCase().includes("sms")
+    || (a.type || "").includes("문자") || a.activity_type === "sms").length;
+  const email = acts.filter(a =>
+    a.emailId || a.emailMessageId || (a.type || "").toLowerCase().includes("email")
+    || (a.type || "").toLowerCase().includes("sequence") || a.activity_type === "email").length;
+
+  return { date: yd, newOrgs: newOrgs.length, newLeads: newLeads.length,
+           memos: dayMemos.length, todoDone, todoTotal: dayTodos.length,
+           sms, email, actTotal: acts.length };
 }
 
 // ── Slack 메시지 생성 ──────────────────────────────────────
