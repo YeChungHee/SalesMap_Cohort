@@ -4457,13 +4457,72 @@ function computeWeeklyActivity(activities, notes, tasks, offset = 0) {
     activity = { total: periodActs.length, sms, email, other: other < 0 ? 0 : other, items: periodActs };
   }
 
+  // ── 통합 세일즈 활동 리스트 (5W) ──────────────────────────────────────────────
+  // 조직 조인: memo/activity에는 조직명이 인라인으로 없으므로 entity ID로 조인한다.
+  const _deals = STATE.allDeals.length ? STATE.allDeals : (STATE.rawDeals || []);
+  const dealById = {}, leadById = {};
+  _deals.forEach(d => { const id = d.id || d.dealId || d["Deal - RecordId"]; if (id != null) dealById[String(id)] = d; });
+  (STATE.rawLeads || []).forEach(l => { const id = l.id || l.leadId || l["Lead - RecordId"]; if (id != null) leadById[String(id)] = l; });
+  const orgNameById = oid => {
+    if (oid == null) return null;
+    const k = String(oid);
+    return (STATE.orgMap && STATE.orgMap[k] && STATE.orgMap[k].name) || null;
+  };
+  const orgIdOfDeal = d => d && (d.organizationId || d.organization_id || d["Organization - RecordId"] || d["회사 ID"]);
+  const dealOrgName = d => d && (orgNameById(orgIdOfDeal(d)) || d["업체명"] || d["Organization - 이름"] || d["organizationName"]);
+  // 레코드(memo/activity/todo)에서 조직명 해석
+  const resolveOrg = rec => {
+    const oid = rec.organizationId || rec.organization_id || rec["조직 ID"] || rec["organizationId"];
+    if (oid != null && orgNameById(oid)) return orgNameById(oid);
+    const did = rec.dealId || (rec.deal && rec.deal.id) || (rec.entityType === "deal" && rec.entityId) || rec["dealId"];
+    if (did != null && dealById[String(did)]) { const n = dealOrgName(dealById[String(did)]); if (n) return n; }
+    const lid = rec.leadId || (rec.lead && rec.lead.id) || (rec.entityType === "lead" && rec.entityId) || rec["leadId"];
+    if (lid != null && leadById[String(lid)]) { const l = leadById[String(lid)]; const n = orgNameById(orgIdOfDeal(l)) || l["업체명"] || l["Organization - 이름"]; if (n) return n; }
+    // 인라인 명칭 폴백
+    return rec.organization?.name || rec.organization?.["이름"] || rec.deal?.name || rec.lead?.name || "(미상)";
+  };
+  // 담당자(누가) 해석
+  const resolveOwner = rec => {
+    const direct = rec["담당자"] || rec.owner || rec.ownerName || rec.userName || rec.createdByName;
+    if (direct) return direct;
+    const did = rec.dealId || (rec.deal && rec.deal.id) || (rec.entityType === "deal" && rec.entityId);
+    if (did != null && dealById[String(did)]) { const d = dealById[String(did)]; const n = d["담당자"] || d["Deal - 담당자"]; if (n) return n; }
+    return rec.userId || "—";
+  };
+  const firstLine = txt => { if (!txt) return ""; const s = String(txt).replace(/\s+/g, " ").trim(); return s.length > 40 ? s.slice(0, 40) + "…" : s; };
+  const noteType = n => { const r = n["유형"] || n.type; return (Array.isArray(r) ? r[0] : r) || "노트"; };
+  const atOf = rec => rec.createdAt || rec["created_at"] || rec.date || rec["생성 날짜"] || rec["생성일"] || null;
+
+  const activityRows = [];
+  newOrgs.forEach(o => activityRows.push({ at: o.createdAt || o["created_at"] || o["생성일"] || o["생성 날짜"], org: (o["이름"] || o.name || o["회사명"] || "(미상)"), metric: "DB 생성", sub: "신규 조직", title: "", owner: o["담당직원"] || o["Organization - 담당직원"] || "—", status: "생성", source: "org" }));
+  newLeads.forEach(l => activityRows.push({ at: l.createdAt || l["created_at"] || l["생성일"], org: (orgNameById(orgIdOfDeal(l)) || l["업체명"] || l["Organization - 이름"] || l["이름"] || "(미상)"), metric: "DB 생성", sub: "신규 리드", title: l["이름"] || l.name || "", owner: l["담당자"] || "—", status: "신규", source: "lead" }));
+  (consultItems || []).forEach(n => activityRows.push({ at: atOf(n), org: resolveOrg(n), metric: "고객 접촉활동", sub: noteType(n), title: firstLine(n.text || n.content || n["내용"] || n["텍스트"]), owner: resolveOwner(n), status: "기록", source: "memo" }));
+  (reviewItems || []).forEach(n => activityRows.push({ at: atOf(n), org: resolveOrg(n), metric: "고객 접촉활동", sub: "심사", title: firstLine(n.text || n.content || n["내용"]), owner: resolveOwner(n), status: "심사", source: "memo" }));
+  let emailCount = 0;
+  if (activity && activity.items) activity.items.forEach(a => {
+    const isSms = a.smsId || (a.type || "").toLowerCase().includes("sms") || (a.type || "").includes("문자");
+    const isEmail = a.emailId || a.emailMessageId || (a.type || "").toLowerCase().includes("email") || (a.type || "").toLowerCase().includes("sequence");
+    if (!isSms && !isEmail) return;
+    emailCount++;
+    activityRows.push({ at: a.date || a.createdAt || a["created_at"], org: resolveOrg(a), metric: "이메일 발송", sub: isSms ? "문자(SMS)" : ((a.type || "").toLowerCase().includes("sequence") ? "시퀀스" : "이메일"), title: firstLine(a.subject || a.title || a["제목"] || ""), owner: resolveOwner(a), status: "발송", source: "activity" });
+  });
+  activityRows.sort((a, b) => new Date(b.at || 0) - new Date(a.at || 0));
+  const unresolved = activityRows.filter(r => r.org === "(미상)").length;
+  const coreMetrics = {
+    db: newOrgs.length + newLeads.length,
+    contact: (consultItems ? consultItems.length : 0) + (reviewItems ? reviewItems.length : 0),
+    email: emailCount,
+    unresolved, totalRows: activityRows.length
+  };
+
   return {
     dbCreated: { orgs: newOrgs.length, leads: newLeads.length, orgItems: newOrgs, leadItems: newLeads },
     consult, consultItems,
     review, reviewItems,
     noteTotal, noteEtc, noteItems,
     todo,
-    activity
+    activity,
+    activityRows, coreMetrics
   };
 }
 
@@ -4578,7 +4637,48 @@ function renderWeeklyActivity(data, offset = 0) {
       ${bdWrap(id, bdContent)}
     </div>`;
 
-  let html = `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">`;
+  // ── 통합 세일즈 활동 리스트 (5W: 업체·일시·내용·활동·담당자) ──
+  const _rows = data.activityRows || [];
+  const cm = data.coreMetrics || { db:0, contact:0, email:0, unresolved:0, totalRows:0 };
+  const fmtDT = iso => { if(!iso) return "—"; const d=new Date(iso); if(isNaN(d)) return "—"; const hh=d.getHours(), mi=d.getMinutes(); return `${d.getMonth()+1}/${d.getDate()}` + ((hh||mi)?` ${String(hh).padStart(2,'0')}:${String(mi).padStart(2,'0')}`:''); };
+  const mColor = m => m==="DB 생성" ? "#2563eb" : m==="고객 접촉활동" ? "#16a34a" : "#0ea5e9";
+  const chip = (label,n,color) => `<span style="font-size:12px;font-weight:700;color:${color};background:${color}14;border-radius:6px;padding:4px 10px;margin-right:6px">${label} ${n}</span>`;
+  const fbtn = (label,key) => `<button onclick="filterSalesActivity('${key}')" data-fbtn="${key}" style="font-size:11px;border:1px solid var(--line-1);background:var(--bg-2);color:var(--fg-2);border-radius:6px;padding:4px 10px;cursor:pointer;margin-right:4px">${label}</button>`;
+  const listRows = _rows.map(r => `
+    <tr data-metric="${r.metric}" style="border-bottom:1px solid var(--line-1)">
+      <td style="padding:7px 8px;font-size:11px;color:var(--fg-3);white-space:nowrap">${fmtDT(r.at)}</td>
+      <td style="padding:7px 8px;font-size:12px;color:var(--fg-1);font-weight:500">${r.org}</td>
+      <td style="padding:7px 8px"><span style="font-size:10px;font-weight:700;color:${mColor(r.metric)};background:${mColor(r.metric)}14;border-radius:5px;padding:2px 7px;white-space:nowrap">${r.metric}</span></td>
+      <td style="padding:7px 8px;font-size:11px;color:var(--fg-3);white-space:nowrap">${r.sub||""}</td>
+      <td style="padding:7px 8px;font-size:12px;color:var(--fg-2)">${r.title||"—"}</td>
+      <td style="padding:7px 8px;font-size:11px;color:var(--fg-3);white-space:nowrap">${r.owner||"—"}</td>
+      <td style="padding:7px 8px;font-size:11px;color:var(--fg-4);white-space:nowrap">${r.status||""}</td>
+    </tr>`).join("") || `<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--fg-4);font-size:12px">활동 없음</td></tr>`;
+  const topHtml = `
+    <div style="background:var(--bg-2);border:1px solid var(--line-1);border-radius:var(--radius-md);padding:14px 16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <span style="font-size:12px;font-weight:800;color:var(--fg-1);margin-right:6px">핵심 활동 지표</span>
+        ${chip("DB 생성", cm.db, "#2563eb")}${chip("고객 접촉활동", cm.contact, "#16a34a")}${chip("이메일 발송", cm.email, "#0ea5e9")}
+        ${cm.unresolved ? `<span style="font-size:10px;color:#dc2626;margin-left:4px">업체 미상 ${cm.unresolved}건</span>` : ""}
+      </div>
+      <div style="margin-bottom:8px">${fbtn("전체","all")}${fbtn("DB 생성","DB 생성")}${fbtn("고객 접촉활동","고객 접촉활동")}${fbtn("이메일 발송","이메일 발송")}</div>
+      <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+        <table id="sales-activity-table" style="width:100%;border-collapse:collapse;min-width:680px">
+          <thead><tr style="position:sticky;top:0;background:var(--bg-2);z-index:1">
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">일시</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">업체</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">활동</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">세부</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">내용</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">담당자</th>
+            <th style="text-align:left;padding:6px 8px;font-size:10px;color:var(--fg-4);font-weight:700">상태</th>
+          </tr></thead>
+          <tbody>${listRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  let html = topHtml + `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">`;
 
   // ① DB 생성
   const orgRows = (data.dbCreated.orgItems||[]).map(o =>
@@ -4678,6 +4778,21 @@ function toggleActivityBackdata(id) {
   const isOpen = panel.style.display !== "none";
   panel.style.display = isOpen ? "none" : "block";
   if (arrow) arrow.textContent = isOpen ? "▾" : "▴";
+}
+
+// 통합 세일즈 활동 리스트 — 핵심 지표별 필터
+function filterSalesActivity(key) {
+  const table = document.getElementById("sales-activity-table");
+  if (!table) return;
+  table.querySelectorAll("tbody tr[data-metric]").forEach(tr => {
+    tr.style.display = (key === "all" || tr.getAttribute("data-metric") === key) ? "" : "none";
+  });
+  document.querySelectorAll('[data-fbtn]').forEach(b => {
+    const on = b.getAttribute("data-fbtn") === key;
+    b.style.background = on ? "#2563eb" : "var(--bg-2)";
+    b.style.color = on ? "#fff" : "var(--fg-2)";
+    b.style.borderColor = on ? "#2563eb" : "var(--line-1)";
+  });
 }
 
 // ══════════════════════════════════════════════
