@@ -41,16 +41,32 @@ function request(rawUrl, options = {}, body = null) {
   });
 }
 
-// ── SalesMap API 호출 ──────────────────────────────────────
+// ── SalesMap API 호출 (index.html salesmapGet과 동일한 워커 프록시 프로토콜) ──
+// 워커는 POST { url, method, headers, body } 봉투를 받아 SalesMap으로 포워딩한다.
+const SALESMAP_BASE = "https://salesmap.kr/api";
+let _dbgPrinted = false;
 async function smFetch(path, params = {}) {
-  const target = new url.URL(`${WORKER_URL}${path}`);
+  const target = new url.URL(`${SALESMAP_BASE}${path}`);
   Object.entries(params).forEach(([k, v]) => target.searchParams.set(k, v));
-  const res = await request(target.toString(), {
-    method: "GET",
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-  });
-  if (res.status !== 200) throw new Error(`API ${path} 오류: ${res.status}`);
-  return JSON.parse(res.body);
+  const headers  = { "Content-Type": "application/json", Authorization: `Bearer ${TOKEN}` };
+  const envelope = JSON.stringify({ url: target.toString(), method: "GET", headers, body: null });
+  const base     = WORKER_URL.replace(/\/$/, "");
+  let lastErr = null;
+  for (const ep of [base, `${base}/proxy`]) {
+    try {
+      const res = await request(ep, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(envelope) },
+      }, envelope);
+      if (res.status !== 200) { lastErr = new Error(`Worker ${res.status}`); continue; }
+      if (!_dbgPrinted) {   // 첫 응답 구조 1회 출력 (진단용)
+        _dbgPrinted = true;
+        console.log(`🔎 [debug] ${path} 응답 앞부분:`, String(res.body).slice(0, 300));
+      }
+      return JSON.parse(res.body);
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error(`API ${path} 워커 호출 실패`);
 }
 
 // index.html과 동일: 커서 페이지네이션 + 실제 응답 키(data.data.{listKey})
