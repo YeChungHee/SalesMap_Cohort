@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SalesMap — 결제 실현 코호트 대시보드 (Phase 3)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8;--card:#fff;--line:#e6e8ec;--line2:#d3d6dc;
+    --fg1:#1e2430;--fg2:#5b6472;--fg3:#8a929e;
+    --blue:#185fa5;--blue-bg:#e6f1fb;--green:#3b6d11;--green-bg:#eaf3de;
+    --amber:#ba7517;--amber-bg:#faeeda;--red:#a32d2d;--red-bg:#fcebeb;--gray:#5f5e5a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:var(--bg);color:var(--fg1);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 64px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand h1{font-size:19px;font-weight:600;}
+  .ver{font-size:11px;color:var(--blue);background:var(--blue-bg);padding:2px 8px;border-radius:6px;font-weight:600;}
+  .sec-note{font-size:11.5px;color:var(--green);background:var(--green-bg);padding:2px 8px;border-radius:6px;font-weight:600;}
+  .sub{font-size:12.5px;color:var(--fg2);margin-bottom:18px;}
+
+  .loader{background:var(--card);border:1px dashed var(--line2);border-radius:12px;padding:22px;text-align:center;margin-bottom:22px;}
+  .loader p{font-size:13px;color:var(--fg2);margin-bottom:12px;}
+  .controls{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;}
+  .controls label{font-size:12px;color:var(--fg2);}
+  input[type=date],input[type=number]{border:1px solid var(--line2);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:inherit;}
+  input[type=number]{width:64px;}
+  .filebtn{display:inline-block;background:var(--blue);color:#fff;font-weight:600;font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;border:0;font-family:inherit;}
+  #status{font-size:12px;color:var(--fg3);margin-top:10px;}
+
+  section{margin-bottom:26px;}
+  .sec-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;}
+  .sec-head h2{font-size:14.5px;font-weight:600;}
+  .sec-head .hint{font-size:11.5px;color:var(--fg3);}
+  .grid{display:grid;gap:12px;}
+  .g4{grid-template-columns:repeat(4,1fr);}.g3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:820px){.g4{grid-template-columns:repeat(2,1fr);}.g3{grid-template-columns:1fr;}}
+
+  .stat{border-radius:12px;padding:14px 16px;border:1px solid transparent;}
+  .stat .lbl{font-size:12px;margin-bottom:5px;font-weight:600;}
+  .stat .val{font-size:23px;font-weight:700;letter-spacing:-.3px;}
+  .stat .sub{font-size:11px;margin-top:3px;opacity:.85;}
+  .s-green{background:var(--green-bg);border-color:#cfe3a8;}.s-green .lbl,.s-green .val{color:var(--green);}
+  .s-amber{background:var(--amber-bg);border-color:#f3d9a8;}.s-amber .lbl,.s-amber .val{color:var(--amber);}
+  .s-red{background:var(--red-bg);border-color:#f3c2c2;}.s-red .lbl,.s-red .val{color:var(--red);}
+  .s-blue{background:var(--blue-bg);border-color:#bcd9f3;}.s-blue .lbl,.s-blue .val{color:var(--blue);}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  table.heat{width:100%;border-collapse:separate;border-spacing:4px;font-size:12px;table-layout:fixed;min-width:620px;}
+  table.heat th{font-weight:500;color:var(--fg2);font-size:11.5px;}
+  table.heat th.lh{text-align:left;width:150px;}
+  table.heat td.lc{text-align:left;color:var(--fg1);font-size:12px;padding:6px 4px;}
+  table.heat td.cell{text-align:center;padding:8px 0;border-radius:5px;font-weight:500;}
+  .tag{font-size:10px;padding:1px 6px;border-radius:5px;margin-left:4px;font-weight:600;}
+  .tag-m{color:var(--blue);background:var(--blue-bg);}.tag-p{color:var(--amber);background:var(--amber-bg);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--fg2);margin-top:8px;align-items:center;}
+  .legend span{display:flex;align-items:center;gap:5px;}.sw{width:12px;height:12px;border-radius:3px;}
+
+  table.list{width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px;}
+  table.list th{text-align:left;color:var(--fg2);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line2);}
+  table.list td{padding:9px 10px;border-bottom:1px solid var(--line);}
+  table.list tr:last-child td{border-bottom:0;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;}
+  .pill-over{color:var(--red);background:var(--red-bg);}.pill-soon{color:var(--amber);background:var(--amber-bg);}
+  .num{font-variant-numeric:tabular-nums;}.right{text-align:right;}
+  .callout{display:flex;gap:10px;background:var(--blue-bg);border:1px solid #bcd9f3;border-radius:10px;padding:13px 15px;font-size:13px;color:var(--blue);line-height:1.6;margin-top:12px;}
+  .chart-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--fg2);margin-bottom:10px;}
+  .chart-legend span{display:flex;align-items:center;gap:5px;}.ln{width:16px;height:0;border-top-width:2.5px;border-top-style:solid;}
+  #dash{display:none;}
+  footer{margin-top:30px;font-size:11.5px;color:var(--fg3);line-height:1.7;border-top:1px solid var(--line);padding-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>결제 실현 코호트</h1>
+      <span class="ver">Phase 3</span>
+      <span class="sec-note">로컬 처리 · 외부 전송 없음</span>
+    </div>
+  </header>
+  <div class="sub">성사(거래일) → 완료(결제예정일) 시차를 M+n 곡선·3상태로 추적합니다. 데이터는 브라우저 안에서만 처리되며 외부로 전송되지 않습니다.</div>
+
+  <div class="loader" id="loader">
+    <p>세일즈맵에서 내보낸 <b>딜(deal) 엑셀 파일</b>을 선택하세요. (예: 딜-2026-05-30.xlsx)</p>
+    <div class="controls">
+      <label class="filebtn">파일 선택<input type="file" id="file" accept=".xlsx,.xls,.csv" style="display:none"></label>
+      <label>기준일 <input type="date" id="today" value="2026-05-30"></label>
+      <label>유예 한도(개월) <input type="number" id="grace" value="6" min="1" max="12"></label>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="dash">
+    <section>
+      <div class="sec-head"><h2>결제 실현 상태</h2><span class="hint">성사 ≠ 완료 — 결제유예를 3상태로 분리</span></div>
+      <div class="grid g4" id="stateCards"></div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>완료율</h2><span class="hint">성숙 코호트 기준이 진짜 실현율</span></div>
+      <div class="grid g3" id="rateCards"></div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>성사 코호트별 누적 완료율</h2><span class="hint">경과 개월(M+n) 기준 · 빈 칸 = 유예중(미도래)</span></div>
+      <div class="card" style="overflow-x:auto;">
+        <table class="heat"><thead><tr id="heatHead"></tr></thead><tbody id="heatBody"></tbody></table>
+        <div class="legend">
+          <span><span class="sw" style="background:#eaf3de;border:1px solid var(--line2)"></span>0–40%</span>
+          <span><span class="sw" style="background:#97c459"></span>40–70%</span>
+          <span><span class="sw" style="background:#3b6d11"></span>70–100%</span>
+          <span><span class="sw" style="background:#f5f6f8;border:1px dashed var(--line2)"></span>미도래(유예중)</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>완료곡선 — 성숙 기준선</h2><span class="hint">회사의 실제 결제 실현 패턴</span></div>
+      <div class="card"><div id="curve"></div></div>
+      <div class="callout" id="forecastNote"></div>
+    </section>
+
+    <section>
+      <div class="sec-head"><h2>지연 딜 회수 리스트</h2><span class="hint">결제예정일 초과 & 미결제 — 회수 우선순위</span></div>
+      <div class="card" style="padding:4px 16px;overflow-x:auto;">
+        <table class="list"><thead><tr><th>업체</th><th>단계</th><th class="right">성사월</th><th class="right">초과일</th><th class="right">금액</th><th>상태</th></tr></thead>
+        <tbody id="lateBody"></tbody></table>
+      </div>
+    </section>
+  </div>
+
+  <footer id="foot">
+    데이터는 선택한 파일에서 브라우저 메모리로만 읽으며, 어떤 서버로도 전송하지 않습니다. (xlsx 파싱 라이브러리만 CDN 로드)<br>
+    성사=거래일(자금집행 완료), 완료=결제(예정)일 도달(결제 완료), 유예=성사 후 한도 이내 미도래, 지연=예정일 초과 미결제.
+  </footer>
+</div>
+
+<script>
+// ── 결제 실현 모델 (Node 검증 완료 로직) ──
+function pick(d,ks){for(var i=0;i<ks.length;i++){var v=d[ks[i]];if(v!==undefined&&v!==null&&v!=="")return v;}return null;}
+function stageOf(d){return pick(d,["Deal - 파이프라인 단계","파이프라인 단계","currentStageName","stageName","dealStageName","현재 단계","단계"]);}
+function wonDate(d){return parseDate(pick(d,["Deal - 거래일","거래일","자금집행 완료일","자금집행일"]));}
+function payDate(d){return parseDate(pick(d,["Deal - 결제(예정)일","결제(예정)일","결제예정일","결제일"]));}
+function amountOf(d){var v=pick(d,["Deal - 금액","금액","amount"]);var n=parseFloat(String(v).replace(/[^0-9.\-]/g,""));return isFinite(n)?n:0;}
+function orgName(d){return pick(d,["Organization - 이름","업체명","organization_name","organizationName"])||"(미상)";}
+function parseDate(v){if(!v)return null;if(v instanceof Date)return isNaN(v)?null:v;var d=new Date(String(v).replace(" ","T"));return isNaN(d)?null:d;}
+function ym(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");}
+function monthOffset(a,b){return (b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());}
+function dayDiff(a,b){return Math.round((b-a)/86400000);}
+function pctile(a,p){if(!a.length)return 0;var s=a.slice().sort(function(x,y){return x-y;});return s[Math.max(0,Math.ceil(s.length*p/100)-1)];}
+
+function computeRealizationModel(deals,opts){
+  opts=opts||{};var today=opts.today?new Date(opts.today):new Date();var graceMonths=opts.graceMonths||6;
+  var completed=0,pending=0,late=0,compAmt=0,pendAmt=0,lateAmt=0,lags=[],cohortTotal={},cohortCompOff={},forecast={},lateList=[];
+  function addCohort(d,isDone,off){var w=wonDate(d);if(!w)return;var c=ym(w);cohortTotal[c]=(cohortTotal[c]||0)+1;if(isDone){if(!cohortCompOff[c])cohortCompOff[c]=[];cohortCompOff[c].push(Math.max(0,off));}}
+  for(var i=0;i<deals.length;i++){var d=deals[i],st=stageOf(d),w=wonDate(d),p=payDate(d);
+    if(st==="결제 완료"){completed++;compAmt+=amountOf(d);var off=(w&&p)?monthOffset(w,p):0;addCohort(d,true,off);if(w&&p)lags.push(dayDiff(w,p));}
+    else if(st==="자금집행 완료"){addCohort(d,false,0);if(p&&p>=today){pending++;pendAmt+=amountOf(d);var fk=ym(p);if(!forecast[fk])forecast[fk]={count:0,amount:0};forecast[fk].count++;forecast[fk].amount+=amountOf(d);}else{late++;lateAmt+=amountOf(d);lateList.push({org:orgName(d),stage:st,won:w?ym(w):"?",overdueDays:p?dayDiff(p,today):null,amount:amountOf(d)});}}
+    else if(st==="결제 지연"){addCohort(d,false,0);late++;lateAmt+=amountOf(d);lateList.push({org:orgName(d),stage:st,won:w?ym(w):"?",overdueDays:p?dayDiff(p,today):null,amount:amountOf(d)});}
+  }
+  var total=completed+pending+late;
+  var matureCohorts=Object.keys(cohortTotal).filter(function(c){var dt=new Date(+c.slice(0,4),+c.slice(5)-1,1);return monthOffset(dt,today)>=graceMonths;});
+  function baselineAt(n){var tot=0,done=0;matureCohorts.forEach(function(c){tot+=cohortTotal[c];(cohortCompOff[c]||[]).forEach(function(o){if(o<=n)done++;});});return tot?Math.round(done/tot*100):0;}
+  var baseline=[];for(var n=0;n<=graceMonths;n++)baseline.push(baselineAt(n));
+  function cumRate(c,n){var tot=cohortTotal[c];if(!tot)return null;var done=(cohortCompOff[c]||[]).filter(function(o){return o<=n;}).length;return Math.round(done/tot*100);}
+  var matrix=Object.keys(cohortTotal).sort().map(function(c){var dt=new Date(+c.slice(0,4),+c.slice(5)-1,1);var age=monthOffset(dt,today);var cells=[];for(var n=0;n<=graceMonths;n++)cells.push(n<=age?cumRate(c,n):null);return{cohort:c,won:cohortTotal[c],age:age,mature:age>=graceMonths,cells:cells};});
+  var matureWon=matureCohorts.reduce(function(s,c){return s+cohortTotal[c];},0);
+  var matureDone=matureCohorts.reduce(function(s,c){return s+(cohortCompOff[c]||[]).filter(function(o){return o<=graceMonths;}).length;},0);
+  lateList.sort(function(a,b){return (b.overdueDays||0)-(a.overdueDays||0);});
+  var fcArr=Object.keys(forecast).sort().map(function(k){return{month:k,count:forecast[k].count,amount:forecast[k].amount};});
+  return{today:ym(today),graceMonths:graceMonths,
+    states:{completed:completed,completedAmt:compAmt,pending:pending,pendingAmt:pendAmt,late:late,lateAmt:lateAmt,total:total,
+      overallRate:total?Math.round(completed/total*1000)/10:0,matureRate:matureWon?Math.round(matureDone/matureWon*1000)/10:0},
+    cycle:{p50:pctile(lags,50),p90:pctile(lags,90),max:lags.length?Math.max.apply(null,lags):0,n:lags.length},
+    baseline:baseline,matrix:matrix,forecast:fcArr,lateList:lateList};
+}
+
+// ── 렌더 ──
+function eok(v){return "₩"+(v/1e8).toFixed(1)+"억";}
+function fillColor(p){if(p==null)return{bg:"#f5f6f8",fg:"#8a929e",dash:true};if(p<40)return{bg:"#eaf3de",fg:"#27500a"};if(p<70)return{bg:"#97c459",fg:"#173404"};return{bg:"#3b6d11",fg:"#eaf3de"};}
+
+function render(m){
+  document.getElementById("dash").style.display="block";
+  var s=m.states;
+  document.getElementById("stateCards").innerHTML=
+    card("s-green","완료 (실현)",s.completed+"건",eok(s.completedAmt)+" · 결제 완료")+
+    card("s-amber","유예 중 (미도래)",s.pending+"건",eok(s.pendingAmt)+" · 정상 대기")+
+    card("s-red","지연 (초과)",s.late+"건",eok(s.lateAmt)+" · 회수 대상")+
+    card("s-blue","평균 완료기간","P50 "+m.cycle.p50+"일","P90 "+m.cycle.p90+"일 · 성사→결제");
+  document.getElementById("rateCards").innerHTML=
+    card("s-blue","성숙 코호트 완료율",s.matureRate+"%","성사+"+m.graceMonths+"개월 경과 코호트")+
+    card("s-green","전체 완료율",s.overallRate+"%","완료 ÷ 성사("+s.total+")")+
+    card("s-amber","성사 합계",s.total+"건","완료+유예+지연");
+
+  // 히트맵
+  var head="<th class='lh'>성사월 (성사수)</th>";
+  for(var n=0;n<=m.graceMonths;n++)head+="<th>M+"+n+"</th>";
+  document.getElementById("heatHead").innerHTML=head;
+  var recent=m.matrix.filter(function(r){return r.age<=m.graceMonths+2;});
+  var rowsHtml=(recent.length?recent:m.matrix).slice(-14).map(function(r){
+    var cells=r.cells.map(function(p){var f=fillColor(p);var bd=f.dash?"border:1px dashed var(--line2);":"";return "<td class='cell' style='background:"+f.bg+";color:"+f.fg+";"+bd+"'>"+(p==null?"—":p+"%")+"</td>";}).join("");
+    var tag=r.mature?"<span class='tag tag-m'>성숙</span>":"<span class='tag tag-p'>진행</span>";
+    return "<tr><td class='lc'>"+r.cohort+" ("+r.won+")"+tag+"</td>"+cells+"</tr>";
+  }).join("");
+  document.getElementById("heatBody").innerHTML=rowsHtml;
+
+  // 완료곡선 SVG (성숙 기준선 + 최근 2개 코호트)
+  document.getElementById("curve").innerHTML=curveSVG(m);
+
+  // 예측
+  var fc=m.forecast;
+  if(fc.length){
+    var tot=fc.reduce(function(a,f){return a+f.amount;},0);
+    var totC=fc.reduce(function(a,f){return a+f.count;},0);
+    var detail=fc.map(function(f){return f.month+" "+f.count+"건 "+eok(f.amount);}).join(" · ");
+    document.getElementById("forecastNote").innerHTML="<span>유예 중 "+s.pending+"건에 결제예정일 기준 향후 <b>"+totC+"건 · "+eok(tot)+" 결제 실현 예상</b>. 월별: "+detail+"</span>";
+  } else document.getElementById("forecastNote").innerHTML="<span>유예 중 딜이 없습니다.</span>";
+
+  // 지연 리스트
+  document.getElementById("lateBody").innerHTML=m.lateList.map(function(l){
+    var pill=(l.overdueDays!=null&&l.overdueDays>90)?"<span class='pill pill-over'>장기 초과</span>":"<span class='pill pill-soon'>초과</span>";
+    return "<tr><td>"+l.org+"</td><td style='color:var(--fg2)'>"+l.stage+"</td><td class='right num'>"+l.won+"</td><td class='right num'>"+(l.overdueDays!=null?l.overdueDays+"일":"-")+"</td><td class='right num'>"+eok(l.amount)+"</td><td>"+pill+"</td></tr>";
+  }).join("")||"<tr><td colspan='6' style='color:var(--fg3);padding:14px'>지연 딜 없음</td></tr>";
+}
+
+function card(cls,lbl,val,sub){return "<div class='stat "+cls+"'><div class='lbl'>"+lbl+"</div><div class='val'>"+val+"</div><div class='sub'>"+sub+"</div></div>";}
+
+function curveSVG(m){
+  var W=620,H=240,pl=42,pr=16,pt=14,pb=28,iw=W-pl-pr,ih=H-pt-pb,G=m.graceMonths;
+  function X(n){return pl+(G?n/G:0)*iw;}function Y(p){return pt+(1-p/100)*ih;}
+  var grid="";for(var p=0;p<=100;p+=25){var y=Y(p);grid+="<line x1='"+pl+"' y1='"+y+"' x2='"+(W-pr)+"' y2='"+y+"' stroke='#eef0f3'/><text x='"+(pl-6)+"' y='"+(y+3)+"' text-anchor='end' font-size='10' fill='#8a929e'>"+p+"%</text>";}
+  var xlab="";for(var n=0;n<=G;n++)xlab+="<text x='"+X(n)+"' y='"+(H-8)+"' text-anchor='middle' font-size='10' fill='#8a929e'>M+"+n+"</text>";
+  function line(arr,color,dash){var pts=arr.map(function(v,n){return (v==null?null:X(n)+","+Y(v));}).filter(Boolean);if(pts.length<1)return "";var d=dash?" stroke-dasharray='5,4'":"";var dots=arr.map(function(v,n){return v==null?"":"<circle cx='"+X(n)+"' cy='"+Y(v)+"' r='3' fill='"+color+"'/>";}).join("");return "<polyline points='"+pts.join(" ")+"' fill='none' stroke='"+color+"' stroke-width='2.5'"+d+"/>"+dots;}
+  var legendItems=[{c:"#185fa5",t:"성숙 기준선",dash:false,data:m.baseline}];
+  var recents=m.matrix.filter(function(r){return !r.mature&&r.cells.some(function(x){return x!=null;});}).slice(-2);
+  var palette=["#ba7517","#a32d2d"];
+  recents.forEach(function(r,i){legendItems.push({c:palette[i%2],t:r.cohort+" (진행)",dash:true,data:r.cells});});
+  var lines=legendItems.map(function(it){return line(it.data,it.c,it.dash);}).join("");
+  var leg=legendItems.map(function(it){return "<span><span class='ln' style='border-top-color:"+it.c+";"+(it.dash?"border-top-style:dashed":"")+"'></span>"+it.t+"</span>";}).join("");
+  return "<div class='chart-legend'>"+leg+"</div><svg viewBox='0 0 "+W+" "+H+"' width='100%' style='max-width:680px'>"+grid+xlab+lines+"</svg>";
+}
+
+// ── 파일 로드 ──
+function parseRows(rows){return rows;}
+function run(){
+  var f=document.getElementById("file").files[0];
+  if(!f){return;}
+  var today=document.getElementById("today").value||"2026-05-30";
+  var grace=parseInt(document.getElementById("grace").value)||6;
+  document.getElementById("status").textContent="파일 읽는 중…";
+  var rd=new FileReader();
+  rd.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:"array",cellDates:true});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var rows=XLSX.utils.sheet_to_json(ws,{defval:null,raw:true});
+      var m=computeRealizationModel(rows,{today:today,graceMonths:grace});
+      document.getElementById("status").textContent="";
+      document.getElementById("loader").style.borderStyle="solid";
+      render(m);
+    }catch(err){document.getElementById("status").textContent="오류: "+err.message;}
+  };
+  rd.readAsArrayBuffer(f);
+}
+document.getElementById("file").addEventListener("change",run);
+document.getElementById("today").addEventListener("change",function(){if(document.getElementById("file").files[0])run();});
+document.getElementById("grace").addEventListener("change",function(){if(document.getElementById("file").files[0])run();});
+</script>
+</body>
+</html>

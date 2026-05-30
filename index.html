@@ -371,6 +371,7 @@ tbody tr:hover td{background:var(--primary-50)}
     <!-- ══════ 대시보드 ══════ -->
     <div class="section active" id="view-overview">
       <div id="kpi-wrap" style="margin-bottom:16px"></div>
+      <div id="realization-wrap" style="margin-bottom:16px"></div>
       <!-- 코호트 전환 현황 — 전체 너비 -->
       <div class="card">
         <div class="card-header">
@@ -2233,6 +2234,7 @@ const STATE = {
   pipelineMetrics:   null,      // null = 미로드
   cohortKPI:         null,      // Row 1: 유입일 기준 코호트 KPI
   activityKPI:       null,      // Row 2: 실거래 일자 기준 활동 KPI
+  realization:       null,      // Phase 3: 결제 실현 코호트 모델 (3상태·M+n·예측·지연)
   activeCustomers:   null,      // 이용 고객 { count, companies:[{name,type}] }
   allDeals:          [],         // 전기간 원본 딜 목록 (덮어쓰기 금지 — 기간 필터 기준)
   rawDeals:          [],         // 원본 딜 목록 (기간 필터 재계산용)
@@ -2474,6 +2476,7 @@ function renderKPI() {
   const ck = STATE.cohortKPI  || {};
   const ak = STATE.activityKPI || {};
   const ac = STATE.activeCustomers;
+  const rzs = (STATE.realization && STATE.realization.states) || {};
 
   // Row 1 — 유입 코호트
   const inf  = ck.totalInflow    || 0;
@@ -2481,12 +2484,16 @@ function renderKPI() {
   const dc   = ck.dealConversion || 0;
   const wc   = ck.wonCount       || 0;
   const acCo = ck.activeCustomers|| 0;
+  const rzDone = rzs.completed || 0;          // 결제 완료(전체 코호트)
+  const rzRate = rzs.matureRate != null ? rzs.matureRate : null; // 성숙 코호트 완료율
 
   const r1Cards = [
     { label:"총 유입",   value: inf  ? fmt(inf)  : "–", sub:"이번 기간 유입 리드",  basis:"리드 생성일 기준",           row:1 },
     { label:"리드 전환", value: lc   ? fmt(lc)   : "–", sub:`전환율 ${inf ? pct(lc,inf) : "–"}`,  basis:"유입 업체 → 딜 파이프라인 진입", row:1 },
     { label:"딜 전환",   value: dc   ? fmt(dc)   : "–", sub:`리드 대비 ${lc ? pct(dc,lc) : "–"}`, basis:"유입 업체 → 딜 파이프라인",   row:1 },
     { label:"딜 성사",   value: wc   ? fmt(wc)   : "–", sub:`딜 대비 ${dc ? pct(wc,dc) : "–"}`,  basis:"유입 업체 → 자금집행 완료",   row:1 },
+    { label:"딜 완료",   value: rzDone ? fmt(rzDone) : "–", sub:`결제 완료 · 전체 코호트`, basis:"결제(예정)일 도달", row:1 },
+    { label:"완료율",   value: rzRate != null ? `${rzRate}%` : "–", sub:"성숙 코호트 기준", basis:"성사+6개월 경과 코호트", row:1 },
     { label:"이용 고객", value: acCo ? String(acCo) : "–",
       sub:  ck.isAllPeriod ? "자금집행+결제완료+지연 전체" : "자금집행 완료 단계",
       basis:ck.isAllPeriod ? "누적 전체 이용 업체"         : "결제 완료 제외",
@@ -2536,6 +2543,143 @@ function renderKPI() {
     <div class="kpi-row1">${r1Cards.map(c => mkCard(c)).join("")}</div>
     <div class="kpi-section-label" style="margin-top:14px;color:#b45309">거래 현황 — 실거래 일자 기준</div>
     <div class="kpi-row2">${r2Cards.map(c => mkCard(c)).join("")}</div>`;
+}
+
+// ── 결제 실현 코호트 모델 렌더 (Phase 3) ───────────────────────────────────────
+function renderRealization() {
+  const wrap = $("realization-wrap");
+  if (!wrap) return;
+  const m = STATE.realization;
+  if (!m || !m.states || !m.states.total) { wrap.innerHTML = ""; return; }
+  const s = m.states;
+  const eok = v => "₩" + (v / 1e8).toFixed(1) + "억";
+
+  const stat = (bg, bd, fg, lbl, val, sub) =>
+    `<div style="background:${bg};border:1px solid ${bd};border-radius:12px;padding:13px 15px">
+       <div style="font-size:12px;font-weight:600;color:${fg};margin-bottom:4px">${lbl}</div>
+       <div style="font-size:22px;font-weight:700;color:${fg};letter-spacing:-.3px">${val}</div>
+       <div style="font-size:11px;color:${fg};opacity:.82;margin-top:2px">${sub}</div>
+     </div>`;
+
+  const stateCards =
+    stat("#eaf3de", "#cfe3a8", "#3b6d11", "완료 (실현)", s.completed + "건", eok(s.completedAmt) + " · 결제 완료") +
+    stat("#faeeda", "#f3d9a8", "#ba7517", "유예 중 (미도래)", s.pending + "건", eok(s.pendingAmt) + " · 정상 대기") +
+    stat("#fcebeb", "#f3c2c2", "#a32d2d", "지연 (초과)", s.late + "건", eok(s.lateAmt) + " · 회수 대상") +
+    stat("#e6f1fb", "#bcd9f3", "#185fa5", "평균 완료기간", "P50 " + m.cycle.p50 + "일", "P90 " + m.cycle.p90 + "일 · 성사→결제");
+  const rateCards =
+    stat("#e6f1fb", "#bcd9f3", "#185fa5", "성숙 코호트 완료율", s.matureRate + "%", "성사+" + m.graceMonths + "개월 경과") +
+    stat("#eaf3de", "#cfe3a8", "#3b6d11", "전체 완료율", s.overallRate + "%", "완료 ÷ 성사(" + s.total + ")") +
+    stat("#faeeda", "#f3d9a8", "#ba7517", "성사 합계", s.total + "건", "완료+유예+지연");
+
+  // M+n 히트맵
+  const fillC = p => p == null ? { bg: "#f6f7f9", fg: "#8a929e", dash: true }
+    : p < 40 ? { bg: "#eaf3de", fg: "#27500a" } : p < 70 ? { bg: "#97c459", fg: "#173404" } : { bg: "#3b6d11", fg: "#eaf3de" };
+  let head = "<th style='text-align:left;width:150px;font-weight:500;color:var(--fg-3);font-size:11.5px'>성사월 (성사수)</th>";
+  for (let n = 0; n <= m.graceMonths; n++) head += `<th style="font-weight:500;color:var(--fg-3);font-size:11.5px">M+${n}</th>`;
+  const recent = m.matrix.filter(r => r.age <= m.graceMonths + 2);
+  const rowsHtml = (recent.length ? recent : m.matrix).slice(-14).map(r => {
+    const cells = r.cells.map(p => {
+      const f = fillC(p);
+      const bd = f.dash ? "border:1px dashed var(--line);" : "";
+      return `<td style="text-align:center;padding:7px 0;border-radius:5px;background:${f.bg};color:${f.fg};${bd}font-weight:500">${p == null ? "—" : p + "%"}</td>`;
+    }).join("");
+    const tag = r.mature
+      ? `<span style="font-size:10px;color:#185fa5;background:#e6f1fb;padding:1px 6px;border-radius:5px;margin-left:4px;font-weight:600">성숙</span>`
+      : `<span style="font-size:10px;color:#ba7517;background:#faeeda;padding:1px 6px;border-radius:5px;margin-left:4px;font-weight:600">진행</span>`;
+    return `<tr><td style="text-align:left;color:var(--fg-1);font-size:12px;padding:6px 4px">${r.cohort} (${r.won})${tag}</td>${cells}</tr>`;
+  }).join("");
+  const heatTable =
+    `<table style="width:100%;border-collapse:separate;border-spacing:4px;font-size:12px;table-layout:fixed;min-width:620px">
+       <thead><tr>${head}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
+
+  // 완료곡선 SVG (성숙 기준선 + 최근 2개 코호트)
+  const curve = realizationCurveSVG(m);
+
+  // 예측
+  let fcNote = "유예 중 딜이 없습니다.";
+  if (m.forecast.length) {
+    const tot = m.forecast.reduce((a, f) => a + f.amount, 0);
+    const totC = m.forecast.reduce((a, f) => a + f.count, 0);
+    const detail = m.forecast.map(f => `${f.month} ${f.count}건 ${eok(f.amount)}`).join(" · ");
+    fcNote = `유예 중 ${s.pending}건 → 결제예정일 기준 향후 <b>${totC}건 · ${eok(tot)} 결제 실현 예상</b>. 월별: ${detail}`;
+  }
+
+  // 지연 리스트
+  const lateRows = m.lateList.map(l => {
+    const longOver = l.overdueDays != null && l.overdueDays > 90;
+    const pill = longOver
+      ? `<span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;color:#a32d2d;background:#fcebeb">장기 초과</span>`
+      : `<span style="font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;color:#ba7517;background:#faeeda">초과</span>`;
+    return `<tr>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--line)">${l.org}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--line);color:var(--fg-3)">${l.stage}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--line);text-align:right">${l.won}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--line);text-align:right">${l.overdueDays != null ? l.overdueDays + "일" : "-"}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--line);text-align:right">${eok(l.amount)}</td>
+      <td style="padding:9px 10px;border-bottom:1px solid var(--line)">${pill}</td></tr>`;
+  }).join("") || `<tr><td colspan="6" style="padding:14px;color:var(--fg-4)">지연 딜 없음</td></tr>`;
+
+  const sl = "font-size:13px;font-weight:600;margin:0 0 10px";
+  const hint = "font-size:11.5px;color:var(--fg-4);font-weight:400;margin-left:6px";
+  wrap.innerHTML = `
+    <div class="kpi-section-label" style="color:#3b6d11">결제 실현 — 성사→완료 코호트 추적 (Phase 3)<span style="${hint}">거래일·결제예정일 기준 · 전체 코호트</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px">${stateCards}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px">${rateCards}</div>
+    <div class="card" style="margin-top:14px">
+      <div style="${sl}">성사 코호트별 누적 완료율<span style="${hint}">경과 개월(M+n) · 빈 칸 = 유예중(미도래)</span></div>
+      <div style="overflow-x:auto">${heatTable}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--fg-3);margin-top:8px;align-items:center">
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#eaf3de;border:1px solid var(--line)"></span>0–40%</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#97c459"></span>40–70%</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#3b6d11"></span>70–100%</span>
+        <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#f6f7f9;border:1px dashed var(--line)"></span>미도래(유예중)</span>
+      </div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div style="${sl}">완료곡선 — 성숙 기준선<span style="${hint}">회사의 실제 결제 실현 패턴</span></div>
+      ${curve}
+      <div style="display:flex;gap:10px;background:#e6f1fb;border:1px solid #bcd9f3;border-radius:10px;padding:12px 14px;font-size:13px;color:#185fa5;line-height:1.6;margin-top:10px">${fcNote}</div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div style="${sl}">지연 딜 회수 리스트<span style="${hint}">결제예정일 초과 & 미결제 · 회수 우선순위</span></div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px;min-width:560px">
+          <thead><tr>
+            <th style="text-align:left;color:var(--fg-3);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line)">업체</th>
+            <th style="text-align:left;color:var(--fg-3);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line)">단계</th>
+            <th style="text-align:right;color:var(--fg-3);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line)">성사월</th>
+            <th style="text-align:right;color:var(--fg-3);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line)">초과일</th>
+            <th style="text-align:right;color:var(--fg-3);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line)">금액</th>
+            <th style="text-align:left;color:var(--fg-3);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line)">상태</th>
+          </tr></thead><tbody>${lateRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// 결제 실현 완료곡선 SVG (성숙 기준선 + 최근 진행 코호트 2개)
+function realizationCurveSVG(m) {
+  const W = 620, H = 240, pl = 42, pr = 16, pt = 14, pb = 28, iw = W - pl - pr, ih = H - pt - pb, G = m.graceMonths;
+  const X = n => pl + (G ? n / G : 0) * iw;
+  const Y = p => pt + (1 - p / 100) * ih;
+  let grid = "";
+  for (let p = 0; p <= 100; p += 25) { const y = Y(p); grid += `<line x1="${pl}" y1="${y}" x2="${W - pr}" y2="${y}" stroke="#eef0f3"/><text x="${pl - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="#8a929e">${p}%</text>`; }
+  let xlab = "";
+  for (let n = 0; n <= G; n++) xlab += `<text x="${X(n)}" y="${H - 8}" text-anchor="middle" font-size="10" fill="#8a929e">M+${n}</text>`;
+  const line = (arr, color, dash) => {
+    const pts = arr.map((v, n) => v == null ? null : `${X(n)},${Y(v)}`).filter(Boolean);
+    if (!pts.length) return "";
+    const dots = arr.map((v, n) => v == null ? "" : `<circle cx="${X(n)}" cy="${Y(v)}" r="3" fill="${color}"/>`).join("");
+    return `<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="2.5"${dash ? ' stroke-dasharray="5,4"' : ""}/>${dots}`;
+  };
+  const items = [{ c: "#185fa5", t: "성숙 기준선", dash: false, data: m.baseline }];
+  const recents = m.matrix.filter(r => !r.mature && r.cells.some(x => x != null)).slice(-2);
+  const palette = ["#ba7517", "#a32d2d"];
+  recents.forEach((r, i) => items.push({ c: palette[i % 2], t: r.cohort + " (진행)", dash: true, data: r.cells }));
+  const lines = items.map(it => line(it.data, it.c, it.dash)).join("");
+  const leg = items.map(it => `<span style="display:flex;align-items:center;gap:5px"><span style="width:16px;height:0;border-top:2.5px ${it.dash ? "dashed" : "solid"} ${it.c}"></span>${it.t}</span>`).join("");
+  return `<div style="display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--fg-3);margin-bottom:10px">${leg}</div>
+    <svg viewBox="0 0 ${W} ${H}" width="100%" style="max-width:680px">${grid}${xlab}${lines}</svg>`;
 }
 
 // 코호트 테이블
@@ -4920,6 +5064,7 @@ async function generateAnnualReport(year) {
 function renderAll() {
   renderRoleBadge();
   renderKPI();
+  renderRealization();
   renderCohortTable();
   renderFunnel();
   renderFreshness();
@@ -5109,7 +5254,16 @@ $("ctrl-period").addEventListener("change", e => {
   renderAll();
 });
 $("ctrl-source").addEventListener("change", e => { STATE.source = e.target.value; renderAll(); });
-$("btn-refresh").addEventListener("click", () => { toast("데이터를 갱신합니다."); renderAll(); });
+$("btn-refresh").addEventListener("click", () => {
+  // API 설정이 있으면 세일즈맵에서 실데이터 재요청(loadRealData → recompute → renderAll),
+  // 없으면 메모리 데이터로 재렌더만 수행
+  if (typeof loadRealData === "function" && salesmapConfig().ready) {
+    toast("세일즈맵에서 데이터를 다시 불러옵니다.");
+    loadRealData();
+  } else {
+    toast("데이터를 갱신합니다."); renderAll();
+  }
+});
 
 // 퍼널 기간 선택기
 document.addEventListener("change", e => {
@@ -5863,6 +6017,120 @@ function parseDealPurchaseType(deal) {
 //  - 구매이력 = "Repeat" + 직전 거래일 > 6개월  → 재활성화
 const PAID_STAGES = ["결제 완료", "결제 지연", "자금집행 완료"];
 const LOST_STAGES = ["진행 거절","신청 취소","보류 서류/계약"];
+
+// ── 결제 실현 코호트 모델 (Phase 3) ────────────────────────────────────────────
+// 성사(거래일)→완료(결제예정일) 시차를 M+n 곡선·3상태(완료/유예/지연)로 추적.
+// 날짜 우선순위(운영 정책): 거래일·결제(예정)일 1순위, 단계 진입일은 폴백.
+//   (진입일은 데이터 수정 지연이 잦아 신뢰도 낮음)
+// 단계 카테고리는 loadPipelineMapping()의 성사/완료/채권을 사용.
+function computeRealizationModel(deals, opts) {
+  opts = opts || {};
+  var today = opts.today ? new Date(opts.today) : new Date();
+  var graceMonths = opts.graceMonths || 6;
+
+  var mapping = loadPipelineMapping();
+  var salesMap = Object.fromEntries(mapping.filter(function (m) { return m.pipe === "세일즈"; }).map(function (m) { return [m.stage, m]; }));
+  var wonStages       = Object.values(salesMap).filter(function (m) { return m.cat === "성사"; }).map(function (m) { return m.stage; });
+  var completedStages = Object.values(salesMap).filter(function (m) { return m.cat === "완료"; }).map(function (m) { return m.stage; });
+  var delayStages     = Object.values(salesMap).filter(function (m) { return m.cat === "채권"; }).map(function (m) { return m.stage; });
+
+  function amt(d) {
+    var v = d["매입액"] || d["거래금액"] || d["자금집행액"] || d["금액"] || d["Deal - 금액"] || d.amount;
+    var n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+    return isFinite(n) ? n : 0;
+  }
+  function orgNm(d) {
+    var id = d.organizationId || d.organization_id || null;
+    return d["업체명"] || d["Organization - 이름"] || d["organization_name"]
+      || (id && STATE.orgMap && STATE.orgMap[String(id)] && STATE.orgMap[String(id)].name) || id || "(미상)";
+  }
+  function tsFrom(raw) { var t = raw ? new Date(raw).getTime() : NaN; return isNaN(t) ? null : t; }
+  function wonTs(d, dw) {
+    var direct = tsFrom(d["거래일"] || d["자금집행 완료일"] || d["자금집행일"] || d["Deal - 거래일"]);
+    if (direct) return direct;
+    for (var i = 0; i < wonStages.length; i++) if (dw[wonStages[i]] && dw[wonStages[i]].enteredTs) return dw[wonStages[i]].enteredTs;
+    return null;
+  }
+  function compTs(d, dw) {
+    var direct = tsFrom(d["결제(예정)일"] || d["결제예정일"] || d["결제일"] || d["Deal - 결제(예정)일"]);
+    if (direct) return direct;
+    for (var i = 0; i < completedStages.length; i++) if (dw[completedStages[i]] && dw[completedStages[i]].enteredTs) return dw[completedStages[i]].enteredTs;
+    return null;
+  }
+  function ymOf(ts) { var d = new Date(ts); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); }
+  function monthOffYM(c, ref) { return (ref.getFullYear() - +c.slice(0, 4)) * 12 + (ref.getMonth() + 1 - +c.slice(5)); }
+  function monthOffTs(a, b) { var x = new Date(a), y = new Date(b); return (y.getFullYear() - x.getFullYear()) * 12 + (y.getMonth() - x.getMonth()); }
+  function dayDiff(a, b) { return Math.round((b - a) / 86400000); }
+  function pctile(arr, p) { if (!arr.length) return 0; var s = arr.slice().sort(function (a, b) { return a - b; }); return s[Math.max(0, Math.ceil(s.length * p / 100) - 1)]; }
+
+  var completed = 0, pending = 0, late = 0, compAmt = 0, pendAmt = 0, lateAmt = 0;
+  var lags = [], cohortTotal = {}, cohortCompOff = {}, forecast = {}, lateList = [];
+  var todayTs = today.getTime();
+
+  function addCohort(wts, isDone, off) {
+    if (!wts) return;
+    var c = ymOf(wts);
+    cohortTotal[c] = (cohortTotal[c] || 0) + 1;
+    if (isDone) { if (!cohortCompOff[c]) cohortCompOff[c] = []; cohortCompOff[c].push(Math.max(0, off)); }
+  }
+
+  for (var i = 0; i < deals.length; i++) {
+    var d = deals[i];
+    var dw = parseStageDwells(d, "세일즈 파이프라인");
+    var cur = detectCurrentStage(d, "세일즈 파이프라인") || d["Deal - 파이프라인 단계"] || d["파이프라인 단계"];
+    if (!cur) continue;
+    var wts = wonTs(d, dw), cts = compTs(d, dw);
+
+    if (completedStages.indexOf(cur) >= 0) {
+      completed++; compAmt += amt(d);
+      addCohort(wts, true, (wts && cts) ? monthOffTs(wts, cts) : 0);
+      if (wts && cts) lags.push(dayDiff(wts, cts));
+    } else if (wonStages.indexOf(cur) >= 0) {
+      addCohort(wts, false, 0);
+      var payTs = cts;
+      if (payTs && payTs >= todayTs) {
+        pending++; pendAmt += amt(d);
+        var fk = ymOf(payTs);
+        if (!forecast[fk]) forecast[fk] = { count: 0, amount: 0 };
+        forecast[fk].count++; forecast[fk].amount += amt(d);
+      } else {
+        late++; lateAmt += amt(d);
+        lateList.push({ org: orgNm(d), stage: cur, won: wts ? ymOf(wts) : "?", overdueDays: payTs ? dayDiff(payTs, todayTs) : null, amount: amt(d) });
+      }
+    } else if (delayStages.indexOf(cur) >= 0) {
+      addCohort(wts, false, 0);
+      late++; lateAmt += amt(d);
+      lateList.push({ org: orgNm(d), stage: cur, won: wts ? ymOf(wts) : "?", overdueDays: cts ? dayDiff(cts, todayTs) : null, amount: amt(d) });
+    }
+  }
+
+  var total = completed + pending + late;
+  var matureCohorts = Object.keys(cohortTotal).filter(function (c) { return monthOffYM(c, today) >= graceMonths; });
+  function baselineAt(n) {
+    var tot = 0, done = 0;
+    matureCohorts.forEach(function (c) { tot += cohortTotal[c]; (cohortCompOff[c] || []).forEach(function (o) { if (o <= n) done++; }); });
+    return tot ? Math.round(done / tot * 100) : 0;
+  }
+  var baseline = []; for (var n = 0; n <= graceMonths; n++) baseline.push(baselineAt(n));
+  function cumRate(c, n) { var tot = cohortTotal[c]; if (!tot) return null; var done = (cohortCompOff[c] || []).filter(function (o) { return o <= n; }).length; return Math.round(done / tot * 100); }
+  var matrix = Object.keys(cohortTotal).sort().map(function (c) {
+    var age = monthOffYM(c, today), cells = [];
+    for (var n = 0; n <= graceMonths; n++) cells.push(n <= age ? cumRate(c, n) : null);
+    return { cohort: c, won: cohortTotal[c], age: age, mature: age >= graceMonths, cells: cells };
+  });
+  var matureWon = matureCohorts.reduce(function (s, c) { return s + cohortTotal[c]; }, 0);
+  var matureDone = matureCohorts.reduce(function (s, c) { return s + (cohortCompOff[c] || []).filter(function (o) { return o <= graceMonths; }).length; }, 0);
+  lateList.sort(function (a, b) { return (b.overdueDays || 0) - (a.overdueDays || 0); });
+  var fcArr = Object.keys(forecast).sort().map(function (k) { return { month: k, count: forecast[k].count, amount: forecast[k].amount }; });
+
+  return {
+    today: ymOf(todayTs), graceMonths: graceMonths,
+    states: { completed: completed, completedAmt: compAmt, pending: pending, pendingAmt: pendAmt, late: late, lateAmt: lateAmt, total: total,
+      overallRate: total ? Math.round(completed / total * 1000) / 10 : 0, matureRate: matureWon ? Math.round(matureDone / matureWon * 1000) / 10 : 0 },
+    cycle: { p50: pctile(lags, 50), p90: pctile(lags, 90), max: lags.length ? Math.max.apply(null, lags) : 0, n: lags.length },
+    baseline: baseline, matrix: matrix, forecast: fcArr, lateList: lateList
+  };
+}
 
 // ── Row 1: 유입일 기준 코호트 KPI ──────────────────────────────────────────────
 // cohortsBySource / cohortTotals() 는 recomputeForPeriod() 에서
@@ -6741,6 +7009,8 @@ function recomputeForPeriod(deals, leads = []) {
   STATE.activeCustomers = computeActiveCustomers(deals);
   STATE.cohortKPI      = computeCohortKPI(STATE.period);
   STATE.activityKPI    = computeActivityKPI(STATE.period);
+  // 결제 실현 모델: 성사월 코호트 추적이므로 기간 무관 전체 딜 기준
+  STATE.realization    = computeRealizationModel(STATE.allDeals.length ? STATE.allDeals : deals, { graceMonths: 6 });
 }
 
 // 실데이터 전체 로딩

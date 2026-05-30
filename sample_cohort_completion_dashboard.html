@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SalesMap Cohort — 결제 실현 코호트 모델 (샘플)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --line:#e6e8ec; --line2:#d3d6dc;
+    --fg1:#1e2430; --fg2:#5b6472; --fg3:#8a929e;
+    --blue:#185fa5; --blue-bg:#e6f1fb;
+    --green:#3b6d11; --green-bg:#eaf3de;
+    --amber:#ba7517; --amber-bg:#faeeda;
+    --red:#a32d2d; --red-bg:#fcebeb;
+    --gray:#5f5e5a; --gray-bg:#f1efe8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"Pretendard",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    background:var(--bg);color:var(--fg1);line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px 64px;}
+  header.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:8px;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand h1{font-size:19px;font-weight:600;}
+  .ver{font-size:11px;color:var(--blue);background:var(--blue-bg);padding:2px 8px;border-radius:6px;font-weight:600;}
+  .sample-tag{font-size:11px;color:var(--amber);background:var(--amber-bg);padding:2px 8px;border-radius:6px;font-weight:600;}
+  .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .seg{display:flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden;}
+  .seg button{border:0;background:var(--card);padding:7px 13px;font-size:12.5px;color:var(--fg2);cursor:pointer;font-family:inherit;}
+  .seg button.on{background:var(--blue);color:#fff;font-weight:600;}
+  select{border:1px solid var(--line2);border-radius:8px;padding:7px 10px;font-size:12.5px;color:var(--fg1);background:var(--card);font-family:inherit;cursor:pointer;}
+  .sub{font-size:12.5px;color:var(--fg2);margin-bottom:22px;}
+
+  section{margin-bottom:26px;}
+  .sec-head{display:flex;align-items:baseline;gap:8px;margin-bottom:10px;}
+  .sec-head h2{font-size:14.5px;font-weight:600;}
+  .sec-head .hint{font-size:11.5px;color:var(--fg3);}
+
+  .grid{display:grid;gap:12px;}
+  .g5{grid-template-columns:repeat(5,1fr);}
+  .g4{grid-template-columns:repeat(4,1fr);}
+  .g3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:820px){.g5,.g4{grid-template-columns:repeat(2,1fr);}.g3{grid-template-columns:1fr;}}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .kpi .lbl{font-size:12px;color:var(--fg2);margin-bottom:5px;}
+  .kpi .val{font-size:23px;font-weight:600;letter-spacing:-.3px;}
+  .kpi .sub{font-size:11px;color:var(--fg3);margin-top:3px;}
+  .kpi .basis{font-size:10.5px;color:var(--fg3);margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--fg3);font-size:18px;}
+
+  .stat{border-radius:12px;padding:14px 16px;border:1px solid transparent;}
+  .stat .lbl{font-size:12px;margin-bottom:5px;font-weight:600;}
+  .stat .val{font-size:23px;font-weight:700;letter-spacing:-.3px;}
+  .stat .sub{font-size:11px;margin-top:3px;opacity:.85;}
+  .s-green{background:var(--green-bg);border-color:#cfe3a8;} .s-green .lbl,.s-green .val{color:var(--green);}
+  .s-amber{background:var(--amber-bg);border-color:#f3d9a8;} .s-amber .lbl,.s-amber .val{color:var(--amber);}
+  .s-red{background:var(--red-bg);border-color:#f3c2c2;} .s-red .lbl,.s-red .val{color:var(--red);}
+  .s-blue{background:var(--blue-bg);border-color:#bcd9f3;} .s-blue .lbl,.s-blue .val{color:var(--blue);}
+
+  table.heat{width:100%;border-collapse:separate;border-spacing:4px;font-size:12px;table-layout:fixed;}
+  table.heat th{font-weight:500;color:var(--fg2);font-size:11.5px;padding-bottom:2px;}
+  table.heat th.lh{text-align:left;width:150px;}
+  table.heat td.lc{text-align:left;color:var(--fg1);font-size:12px;padding:6px 4px;}
+  table.heat td.cell{text-align:center;padding:8px 0;border-radius:5px;font-weight:500;}
+  .tag{font-size:10px;padding:1px 6px;border-radius:5px;margin-left:4px;font-weight:600;}
+  .tag-m{color:var(--blue);background:var(--blue-bg);}
+  .tag-p{color:var(--amber);background:var(--amber-bg);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--fg2);margin-top:8px;align-items:center;}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .sw{width:12px;height:12px;border-radius:3px;}
+
+  table.list{width:100%;border-collapse:collapse;font-size:12.5px;}
+  table.list th{text-align:left;color:var(--fg2);font-weight:600;font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--line2);}
+  table.list td{padding:9px 10px;border-bottom:1px solid var(--line);color:var(--fg1);}
+  table.list tr:last-child td{border-bottom:0;}
+  .pill{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;}
+  .pill-over{color:var(--red);background:var(--red-bg);}
+  .pill-soon{color:var(--amber);background:var(--amber-bg);}
+  .num{font-variant-numeric:tabular-nums;}
+  .right{text-align:right;}
+
+  .callout{display:flex;gap:10px;background:var(--blue-bg);border:1px solid #bcd9f3;border-radius:10px;padding:13px 15px;font-size:13px;color:var(--blue);line-height:1.6;}
+  .callout b{font-weight:700;}
+  .chart-box{position:relative;width:100%;height:300px;}
+  .chart-legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--fg2);margin-bottom:10px;}
+  .chart-legend span{display:flex;align-items:center;gap:5px;}
+  .ln{width:16px;height:0;border-top-width:2.5px;border-top-style:solid;}
+
+  .anomaly{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--fg1);padding:8px 0;border-bottom:1px dashed var(--line);}
+  .anomaly:last-child{border-bottom:0;}
+  .anomaly .cnt{font-weight:700;color:var(--red);min-width:42px;}
+  footer{margin-top:30px;font-size:11.5px;color:var(--fg3);line-height:1.7;border-top:1px solid var(--line);padding-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>SalesMap Cohort</h1>
+      <span class="ver">v2.13 (제안)</span>
+      <span class="sample-tag">SAMPLE · 가상데이터</span>
+    </div>
+    <div class="controls">
+      <div class="seg" id="modeSeg">
+        <button class="on" data-mode="cohort">코호트 기준</button>
+        <button data-mode="event">성과 발생월</button>
+      </div>
+      <select>
+        <option>전체 기간</option>
+        <option>2026년 5월</option>
+        <option>2026년 4월</option>
+        <option>2026년 1분기</option>
+      </select>
+    </div>
+  </header>
+  <div class="sub" id="modeSub">코호트 기준 — 고객을 <b>실제 최초 유입월</b>에 고정하고 이후 전 기간 이벤트를 추적합니다. 기준일 2026-05-31.</div>
+
+  <!-- A. 데이터 출처 정상화 -->
+  <section>
+    <div class="sec-head"><h2>데이터 출처</h2><span class="hint">2026년 2월 노션 일괄 이관 분리 — 생성일 ≠ 실제 유입일</span></div>
+    <div class="grid g3">
+      <div class="card kpi">
+        <div class="lbl">신규 유입</div><div class="val" style="color:var(--blue)">214</div>
+        <div class="sub">실제 유입일 2026-02 이후</div>
+        <div class="basis">코호트 포함 · actual_inflow_date 기준</div>
+      </div>
+      <div class="card kpi">
+        <div class="lbl">기존 이관 (노션)</div><div class="val" style="color:var(--gray)">137</div>
+        <div class="sub">migration_flag = true</div>
+        <div class="basis">실제 유입월로 재귀속 · 2월 신규에서 제외</div>
+      </div>
+      <div class="card kpi">
+        <div class="lbl">유입일 미확인</div><div class="val" style="color:var(--amber)">23</div>
+        <div class="sub">inflow_confidence 낮음</div>
+        <div class="basis">코호트 계산에서 별도 분리</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- B. 유입 코호트 퍼널 -->
+  <section>
+    <div class="sec-head"><h2>유입 코호트 퍼널</h2><span class="hint">유입 → 리드 → 성사 → 완료, 같은 고객 집합으로 추적</span></div>
+    <div class="grid g5">
+      <div class="card kpi"><div class="lbl">총 유입</div><div class="val">214</div><div class="sub">신규 유입 코호트</div><div class="basis">실제 유입일 기준</div></div>
+      <div class="card kpi"><div class="lbl">리드 전환</div><div class="val">168</div><div class="sub">전환율 79%</div><div class="basis">딜 파이프라인 진입</div></div>
+      <div class="card kpi"><div class="lbl">딜 성사</div><div class="val">201</div><div class="sub" style="color:var(--gray)">누적 성사 건수</div><div class="basis">자금집행 완료</div></div>
+      <div class="card kpi" style="border-color:#cfe3a8"><div class="lbl" style="color:var(--green)">딜 완료</div><div class="val" style="color:var(--green)">142</div><div class="sub">결제 완료 (실현)</div><div class="basis">유예기간 경과 후 결제</div></div>
+      <div class="card kpi" style="border-color:#bcd9f3"><div class="lbl" style="color:var(--blue)">완료율</div><div class="val" style="color:var(--blue)">96%</div><div class="sub">성숙 코호트 M+6</div><div class="basis">25년11월~26년1월</div></div>
+    </div>
+  </section>
+
+  <!-- C. 결제 실현 3상태 -->
+  <section>
+    <div class="sec-head"><h2>결제 실현 상태</h2><span class="hint">성사 ≠ 완료 — 결제유예 1~6개월을 3상태로 분리</span></div>
+    <div class="grid g4">
+      <div class="stat s-green"><div class="lbl">완료 (실현)</div><div class="val">142건</div><div class="sub">결제 완료 · ₩17.8억</div></div>
+      <div class="stat s-amber"><div class="lbl">유예 중 (미도래)</div><div class="val">51건</div><div class="sub">성사+6개월 이내 · 정상 대기</div></div>
+      <div class="stat s-red"><div class="lbl">지연 (초과)</div><div class="val">8건</div><div class="sub">유예 한도 초과 · 회수 대상</div></div>
+      <div class="stat s-blue"><div class="lbl">평균 완료기간</div><div class="val">P50 2.1개월</div><div class="sub">P90 5.3개월 · 성사→결제</div></div>
+    </div>
+  </section>
+
+  <!-- D. M+n 히트맵 -->
+  <section>
+    <div class="sec-head"><h2>성사 코호트별 누적 완료율</h2><span class="hint">절대월이 아닌 경과 개월(M+n) 기준</span></div>
+    <div class="card" style="padding:14px 16px;overflow-x:auto;">
+      <table class="heat" style="min-width:620px;">
+        <thead><tr>
+          <th class="lh">성사월 (성사건수)</th>
+          <th>M+0</th><th>M+1</th><th>M+2</th><th>M+3</th><th>M+4</th><th>M+5</th><th>M+6</th>
+        </tr></thead>
+        <tbody id="heatBody"></tbody>
+      </table>
+      <div class="legend">
+        <span><span class="sw" style="background:#eaf3de;border:1px solid var(--line2)"></span>0–40%</span>
+        <span><span class="sw" style="background:#97c459"></span>40–70%</span>
+        <span><span class="sw" style="background:#3b6d11"></span>70–100%</span>
+        <span><span class="sw" style="background:#f5f6f8;border:1px dashed var(--line2)"></span>미도래 (유예 중)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- E. 완료곡선 + 예측 -->
+  <section>
+    <div class="sec-head"><h2>완료곡선 — 기준선 vs 예측</h2><span class="hint">성숙 코호트로 기준 곡선, 최근 코호트에 적용</span></div>
+    <div class="card">
+      <div class="chart-legend">
+        <span><span class="ln" style="border-top-color:#185fa5"></span>2025-11 (성숙)</span>
+        <span><span class="ln" style="border-top-color:#639922"></span>2026-01 (성숙)</span>
+        <span><span class="ln" style="border-top-color:#ba7517;border-top-style:dashed"></span>2026-03 (예측)</span>
+        <span><span class="ln" style="border-top-color:#a32d2d;border-top-style:dashed"></span>2026-05 (예측)</span>
+      </div>
+      <div class="chart-box"><canvas id="curve"></canvas></div>
+    </div>
+    <div class="callout" style="margin-top:12px;">
+      <span>유예 중 51건에 성숙 곡선을 적용하면 향후 6개월간 <b>약 48건 · ₩6.2억 결제 실현 예상</b>. 월별 예상 현금 유입: 6월 ₩2.1억 · 7월 ₩1.7억 · 8월 ₩1.2억 · 이후 ₩1.2억.</span>
+    </div>
+  </section>
+
+  <!-- F. 지연 딜 회수 리스트 -->
+  <section>
+    <div class="sec-head"><h2>지연 딜 회수 리스트</h2><span class="hint">성사+6개월 초과 & 미결제 — 주간 갱신</span></div>
+    <div class="card" style="padding:4px 16px;overflow-x:auto;">
+      <table class="list" style="min-width:600px;">
+        <thead><tr><th>업체</th><th>딜명</th><th class="right">금액</th><th class="right">성사일</th><th class="right">경과</th><th>상태</th></tr></thead>
+        <tbody id="lateBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- G. 이상치 리포트 -->
+  <section>
+    <div class="sec-head"><h2>이상치 리포트</h2><span class="hint">기준일 정의·이관 미분리·분모불일치 점검</span></div>
+    <div class="card">
+      <div class="anomaly"><span class="cnt">3건</span><span>딜 전환율 100% 초과 유입경로 — 이관 데이터 미분리 의심</span></div>
+      <div class="anomaly"><span class="cnt">5건</span><span>유입 0인데 딜·완료 존재 — 생성일=유입일 오인 케이스</span></div>
+      <div class="anomaly"><span class="cnt">2건</span><span>딜 완료일이 성사일보다 빠름 — 날짜 필드 매핑 오류</span></div>
+      <div class="anomaly"><span class="cnt">1건</span><span>리드 전환 없이 딜 성사 — 단계 이력 누락</span></div>
+      <div class="anomaly"><span class="cnt">4건</span><span>동일 딜 중복 업로드 가능성 — 이관 배치 중복</span></div>
+    </div>
+  </section>
+
+  <footer>
+    본 페이지는 제안 모델을 보여주기 위한 <b>샘플(가상 데이터)</b>입니다. 실제 수치·업체명과 무관합니다.<br>
+    핵심 원칙: ① 2026-02 생성일을 실제 유입일로 간주하지 않음 ② 이관 데이터 분리 ③ 코호트=실제 최초 유입월 ④ 성과=이벤트 발생월 ⑤ 결제유예는 M+n 곡선·3상태로 측정.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  // ── M+n 히트맵 데이터 ──
+  var cohorts=[
+    {m:"2025-11",n:20,mature:true,  v:[10,35,62,80,90,95,97]},
+    {m:"2025-12",n:24,mature:true,  v:[12,38,60,82,91,95,96]},
+    {m:"2026-01",n:28,mature:true,  v:[9,33,58,79,88,93,95]},
+    {m:"2026-02",n:30,mature:false, v:[11,36,61,81,null,null,null]},
+    {m:"2026-03",n:26,mature:false, v:[8,34,59,null,null,null,null]},
+    {m:"2026-04",n:22,mature:false, v:[10,37,null,null,null,null,null]},
+    {m:"2026-05",n:18,mature:false, v:[8,null,null,null,null,null,null]}
+  ];
+  function fill(p){
+    if(p==null) return {bg:"#f5f6f8",fg:"#8a929e",dash:true};
+    if(p<40) return {bg:"#eaf3de",fg:"#27500a"};
+    if(p<70) return {bg:"#97c459",fg:"#173404"};
+    return {bg:"#3b6d11",fg:"#eaf3de"};
+  }
+  document.getElementById("heatBody").innerHTML=cohorts.map(function(c){
+    var cells=c.v.map(function(p){
+      var f=fill(p);
+      var bd=f.dash?"border:1px dashed var(--line2);":"";
+      return '<td class="cell" style="background:'+f.bg+';color:'+f.fg+';'+bd+'">'+(p==null?"—":p+"%")+'</td>';
+    }).join("");
+    var tag=c.mature?'<span class="tag tag-m">성숙</span>':'<span class="tag tag-p">진행</span>';
+    return '<tr><td class="lc">'+c.m+' ('+c.n+')'+tag+'</td>'+cells+'</tr>';
+  }).join("");
+
+  // ── 지연 딜 리스트 ──
+  var late=[
+    {o:"대한정밀",d:"(02)대한정밀_설비A-1108",amt:"₩42,000,000",won:"2025-11-08",mo:6.7,st:"over"},
+    {o:"세움파트너스",d:"(01)세움파트너스_컨설팅-1122",amt:"₩28,500,000",won:"2025-11-22",mo:6.3,st:"over"},
+    {o:"맥스로지스",d:"(03)맥스로지스_운영-1203",amt:"₩51,200,000",won:"2025-12-03",mo:5.9,st:"over"},
+    {o:"누리바이오",d:"(01)누리바이오_장비-1215",amt:"₩36,000,000",won:"2025-12-15",mo:5.5,st:"over"},
+    {o:"한빛에너지",d:"(02)한빛에너지_시공-0104",amt:"₩63,400,000",won:"2026-01-04",mo:4.9,st:"soon"},
+    {o:"코어시스템",d:"(01)코어시스템_SI-0118",amt:"₩22,800,000",won:"2026-01-18",mo:4.4,st:"soon"},
+    {o:"그린팜",d:"(04)그린팜_납품-0122",amt:"₩18,900,000",won:"2026-01-22",mo:4.3,st:"soon"},
+    {o:"제일소재",d:"(02)제일소재_원자재-0205",amt:"₩47,100,000",won:"2026-02-05",mo:3.8,st:"soon"}
+  ];
+  document.getElementById("lateBody").innerHTML=late.map(function(r){
+    var pill=r.st==="over"?'<span class="pill pill-over">유예 초과</span>':'<span class="pill pill-soon">한도 임박</span>';
+    return '<tr><td>'+r.o+'</td><td style="color:var(--fg2)">'+r.d+'</td><td class="right num">'+r.amt+
+      '</td><td class="right num" style="color:var(--fg2)">'+r.won+'</td><td class="right num">'+r.mo.toFixed(1)+'개월</td><td>'+pill+'</td></tr>';
+  }).join("");
+
+  // ── 모드 토글 ──
+  var subEl=document.getElementById("modeSub");
+  document.querySelectorAll("#modeSeg button").forEach(function(b){
+    b.addEventListener("click",function(){
+      document.querySelectorAll("#modeSeg button").forEach(function(x){x.classList.remove("on");});
+      b.classList.add("on");
+      subEl.innerHTML=b.dataset.mode==="cohort"
+        ? '코호트 기준 — 고객을 <b>실제 최초 유입월</b>에 고정하고 이후 전 기간 이벤트를 추적합니다. 기준일 2026-05-31.'
+        : '성과 발생월 기준 — 딜 성사·완료를 <b>이벤트가 실제 발생한 월</b>에 집계합니다. 전환율 해석과 혼합 금지.';
+    });
+  });
+
+  // ── 완료곡선 ──
+  new Chart(document.getElementById("curve"),{
+    type:"line",
+    data:{labels:["M+0","M+1","M+2","M+3","M+4","M+5","M+6"],datasets:[
+      {label:"2025-11",data:[10,35,62,80,90,95,97],borderColor:"#185fa5",backgroundColor:"#185fa5",tension:.3,pointRadius:3},
+      {label:"2026-01",data:[9,33,58,79,88,93,95],borderColor:"#639922",backgroundColor:"#639922",tension:.3,pointRadius:3,pointStyle:"rect"},
+      {label:"2026-03",data:[8,34,59,79,88,93,95],borderColor:"#ba7517",backgroundColor:"#ba7517",borderDash:[6,4],tension:.3,pointRadius:2,pointStyle:"triangle"},
+      {label:"2026-05",data:[8,33,58,79,88,93,95],borderColor:"#a32d2d",backgroundColor:"#a32d2d",borderDash:[3,3],tension:.3,pointRadius:2,pointStyle:"crossRot"}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{min:0,max:100,ticks:{callback:function(v){return v+"%";}},title:{display:true,text:"누적 완료율"}},
+              x:{title:{display:true,text:"성사 후 경과 개월"}}}}
+  });
+})();
+</script>
+</body>
+</html>
